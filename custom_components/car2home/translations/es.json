@@ -1,0 +1,25 @@
+{
+  "config": {
+    "step": {
+      "zeroconf_confirm": {
+        "title": "Car 2 Home descubierto",
+        "description": "La app {model} en {host} quiere emparejarse con Home Assistant. ¿Continuar?"
+      },
+      "pair": {
+        "title": "Emparejar con Car 2 Home",
+        "description": "## Código de emparejamiento\n\n# {code}\n\nIntroduce este código en la aplicación para completar el emparejamiento.\n\n1. Abre la app **Car 2 Home** en tu teléfono.\n2. Ve a **Ajustes → Home Assistant**.\n3. Selecciona la pestaña **Integración**.\n4. Introduce la URL de este Home Assistant (p. ej. `{ha_url}`).\n5. Toca **Emparejar**, introduce el código anterior y confirma.\n6. Vuelve aquí y pulsa **Enviar** para finalizar.\n\nEl código expira a las **{expires_at}** (en {ttl_minutes} minutos)."
+      }
+    },
+    "error": {
+      "invalid_or_expired_code": "Código no válido o expirado. Inicia un nuevo emparejamiento.",
+      "timeout": "Tiempo de emparejamiento agotado. Inténtalo de nuevo.",
+      "unknown": "Error inesperado durante el emparejamiento."
+    },
+    "abort": {
+      "already_configured": "Este vehículo ya está configurado.",
+      "invalid_or_expired_code": "La app no aceptó el código. Inicia un nuevo emparejamiento.",
+      "timeout": "Tiempo agotado — el código expiró antes de que la app confirmara.",
+      "unknown": "Error inesperado durante el emparejamiento."
+    }
+  }
+}

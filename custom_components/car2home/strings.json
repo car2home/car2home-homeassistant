@@ -1,0 +1,46 @@
+{
+  "config": {
+    "step": {
+      "zeroconf_confirm": {
+        "title": "Car 2 Home discovered",
+        "description": "The app {model} on {host} wants to pair with Home Assistant. Continue?"
+      },
+      "pair": {
+        "title": "Pair with Car 2 Home",
+        "description": "## Pairing code\n\n# {code}\n\nEnter this code in the mobile app to finish pairing.\n\n1. Open the **Car 2 Home** app on your phone.\n2. Go to **Settings → Home Assistant**.\n3. Select the **Integration** tab.\n4. Enter the URL of this Home Assistant instance (e.g. `{ha_url}`).\n5. Tap **Pair**, type the code above, and confirm.\n6. Come back here and click **Submit** to finish.\n\nThe code expires at **{expires_at}** (in {ttl_minutes} minutes)."
+      }
+    },
+    "error": {
+      "invalid_or_expired_code": "Code invalid or expired. Start a new pairing.",
+      "timeout": "Pairing timed out. Try again.",
+      "unknown": "Unexpected error during pairing."
+    },
+    "abort": {
+      "already_configured": "This vehicle is already configured.",
+      "invalid_or_expired_code": "The pairing code was not accepted by the app. Start a new pairing.",
+      "timeout": "Pairing timed out — the code expired before the app confirmed.",
+      "unknown": "Unexpected error during pairing."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "ws_connected": {
+        "name": "Connection"
+      }
+    }
+  },
+  "services": {
+    "request_dtc_scan": {
+      "name": "Request DTC scan",
+      "description": "Ask the app to scan Diagnostic Trouble Codes from the connected ECU."
+    },
+    "reannounce": {
+      "name": "Re-announce descriptor",
+      "description": "Force the app to resend its sensor descriptor."
+    },
+    "identify": {
+      "name": "Identify",
+      "description": "Flash/vibrate the paired app to locate it."
+    }
+  }
+}

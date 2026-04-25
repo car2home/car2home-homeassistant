@@ -1,0 +1,25 @@
+{
+  "config": {
+    "step": {
+      "zeroconf_confirm": {
+        "title": "Car 2 Home entdeckt",
+        "description": "Die App {model} auf {host} möchte sich mit Home Assistant koppeln. Fortfahren?"
+      },
+      "pair": {
+        "title": "Mit Car 2 Home koppeln",
+        "description": "## Kopplungscode\n\n# {code}\n\nGib diesen Code in der App ein, um die Kopplung abzuschließen.\n\n1. Öffne die App **Car 2 Home** auf deinem Telefon.\n2. Gehe zu **Einstellungen → Home Assistant**.\n3. Wähle den Tab **Integration**.\n4. Gib die URL dieses Home Assistant ein (z. B. `{ha_url}`).\n5. Tippe auf **Koppeln**, gib den Code oben ein und bestätige.\n6. Komm hierher zurück und klicke auf **Senden**, um abzuschließen.\n\nDer Code läuft um **{expires_at}** ab (in {ttl_minutes} Minuten)."
+      }
+    },
+    "error": {
+      "invalid_or_expired_code": "Code ungültig oder abgelaufen. Kopplung neu starten.",
+      "timeout": "Zeitüberschreitung bei der Kopplung. Erneut versuchen.",
+      "unknown": "Unerwarteter Fehler bei der Kopplung."
+    },
+    "abort": {
+      "already_configured": "Dieses Fahrzeug ist bereits konfiguriert.",
+      "invalid_or_expired_code": "Der Code wurde von der App nicht akzeptiert. Kopplung neu starten.",
+      "timeout": "Zeitüberschreitung — der Code ist abgelaufen, bevor die App bestätigt hat.",
+      "unknown": "Unerwarteter Fehler bei der Kopplung."
+    }
+  }
+}

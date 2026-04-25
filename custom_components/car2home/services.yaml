@@ -1,0 +1,20 @@
+request_dtc_scan:
+  name: Request DTC scan
+  description: Ask the app to run a DTC scan on the connected ECU.
+  target:
+    device:
+      integration: car2home
+
+reannounce:
+  name: Re-announce descriptor
+  description: Force the app to resend its sensor descriptor (hello frame).
+  target:
+    device:
+      integration: car2home
+
+identify:
+  name: Identify device
+  description: Flash/vibrate the app so the user can locate the phone.
+  target:
+    device:
+      integration: car2home

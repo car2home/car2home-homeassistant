@@ -1,0 +1,25 @@
+{
+  "config": {
+    "step": {
+      "zeroconf_confirm": {
+        "title": "Car 2 Home rilevato",
+        "description": "L'app {model} su {host} vuole associarsi a Home Assistant. Continuare?"
+      },
+      "pair": {
+        "title": "Associa Car 2 Home",
+        "description": "## Codice di associazione\n\n# {code}\n\nInserisci questo codice nell'app per completare l'associazione.\n\n1. Apri l'app **Car 2 Home** sul telefono.\n2. Vai in **Impostazioni → Home Assistant**.\n3. Seleziona la scheda **Integrazione**.\n4. Inserisci l'URL di questo Home Assistant (es. `{ha_url}`).\n5. Tocca **Associa**, inserisci il codice qui sopra e conferma.\n6. Torna qui e tocca **Invia** per completare.\n\nIl codice scade alle **{expires_at}** (tra {ttl_minutes} minuti)."
+      }
+    },
+    "error": {
+      "invalid_or_expired_code": "Codice non valido o scaduto. Avvia una nuova associazione.",
+      "timeout": "Tempo di associazione scaduto. Riprova.",
+      "unknown": "Errore imprevisto durante l'associazione."
+    },
+    "abort": {
+      "already_configured": "Questo veicolo è già configurato.",
+      "invalid_or_expired_code": "Il codice non è stato accettato dall'app. Avvia una nuova associazione.",
+      "timeout": "Tempo scaduto — il codice è scaduto prima che l'app confermasse.",
+      "unknown": "Errore imprevisto durante l'associazione."
+    }
+  }
+}

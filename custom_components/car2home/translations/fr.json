@@ -1,0 +1,25 @@
+{
+  "config": {
+    "step": {
+      "zeroconf_confirm": {
+        "title": "Car 2 Home détecté",
+        "description": "L'app {model} sur {host} souhaite s'appairer avec Home Assistant. Continuer ?"
+      },
+      "pair": {
+        "title": "Appairer Car 2 Home",
+        "description": "## Code d'appairage\n\n# {code}\n\nSaisissez ce code dans l'application pour terminer l'appairage.\n\n1. Ouvrez l'app **Car 2 Home** sur votre téléphone.\n2. Allez dans **Paramètres → Home Assistant**.\n3. Sélectionnez l'onglet **Intégration**.\n4. Saisissez l'URL de ce Home Assistant (ex. `{ha_url}`).\n5. Appuyez sur **Appairer**, saisissez le code ci-dessus et confirmez.\n6. Revenez ici et cliquez sur **Valider** pour terminer.\n\nLe code expire à **{expires_at}** (dans {ttl_minutes} minutes)."
+      }
+    },
+    "error": {
+      "invalid_or_expired_code": "Code invalide ou expiré. Recommencez l'appairage.",
+      "timeout": "Délai d'appairage dépassé. Réessayez.",
+      "unknown": "Erreur inattendue pendant l'appairage."
+    },
+    "abort": {
+      "already_configured": "Ce véhicule est déjà configuré.",
+      "invalid_or_expired_code": "Le code n'a pas été accepté par l'app. Recommencez l'appairage.",
+      "timeout": "Délai dépassé — le code a expiré avant la confirmation de l'app.",
+      "unknown": "Erreur inattendue pendant l'appairage."
+    }
+  }
+}

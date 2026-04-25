@@ -1,0 +1,25 @@
+{
+  "config": {
+    "step": {
+      "zeroconf_confirm": {
+        "title": "Car 2 Home descoberto",
+        "description": "O app {model} em {host} quer parear com o Home Assistant. Continuar?"
+      },
+      "pair": {
+        "title": "Parear com Car 2 Home",
+        "description": "## Código de pareamento\n\n# {code}\n\nDigite este código no aplicativo para finalizar o pareamento.\n\n1. Abra o app **Car 2 Home** no seu celular.\n2. Vá em **Configurações → Home Assistant**.\n3. Selecione a aba **Integração**.\n4. Informe a URL deste Home Assistant (ex.: `{ha_url}`).\n5. Toque em **Parear**, informe o código acima e confirme.\n6. Volte aqui e clique em **Enviar** para concluir.\n\nO código expira às **{expires_at}** (em {ttl_minutes} minutos)."
+      }
+    },
+    "error": {
+      "invalid_or_expired_code": "Código inválido ou expirado. Inicie um novo pareamento.",
+      "timeout": "Tempo de pareamento esgotado. Tente novamente.",
+      "unknown": "Erro inesperado durante o pareamento."
+    },
+    "abort": {
+      "already_configured": "Este veículo já está configurado.",
+      "invalid_or_expired_code": "O código de pareamento não foi aceito pelo app. Inicie um novo pareamento.",
+      "timeout": "Tempo de pareamento esgotado — o código expirou antes do app confirmar.",
+      "unknown": "Erro inesperado durante o pareamento."
+    }
+  }
+}
