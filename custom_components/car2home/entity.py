@@ -7,6 +7,8 @@ state keep rendering even after app/network outages.
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -17,11 +19,14 @@ from .const import (
     CONF_HW_VERSION,
     CONF_MANUFACTURER,
     CONF_MODEL,
-    CONF_SW_VERSION,
     CONF_VIN,
     DOMAIN,
     MANUFACTURER_DEFAULT,
 )
+
+_MANIFEST_VERSION = json.loads(
+    (Path(__file__).parent / "manifest.json").read_text(encoding="utf-8")
+).get("version")
 from .coordinator import Car2HomeCoordinator
 from .slug import build_base_slug
 
@@ -62,7 +67,7 @@ class Car2HomeEntity(CoordinatorEntity[Car2HomeCoordinator]):
             manufacturer=data.get(CONF_MANUFACTURER) or MANUFACTURER_DEFAULT,
             model=model,
             name=model,
-            sw_version=data.get(CONF_SW_VERSION),
+            sw_version=_MANIFEST_VERSION,
             hw_version=data.get(CONF_HW_VERSION),
         )
 
