@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="icon.png" alt="Car 2 Home" width="128" height="128" />
+  <img src="icon.svg" alt="Car 2 Home" width="128" height="128" />
 </p>
 
 # Car 2 Home — Home Assistant Integration
