@@ -110,6 +110,13 @@ class Car2HomeSensor(Car2HomeEntity, RestoreSensor, SensorEntity):
         if isinstance(precision, int) and has_numeric_context:
             self._attr_suggested_display_precision = precision
 
+        # ENUM is a non-numeric device_class even though it sets a "context"
+        # — exclude it from the numeric guard in native_value below.
+        self._numeric_required = (
+            has_numeric_context
+            and self._attr_device_class != SensorDeviceClass.ENUM
+        )
+
         # Initialize to None so the defensive check in native_value works even
         # when the descriptor doesn't declare options / this isn't an enum.
         self._attr_options = None
@@ -135,6 +142,23 @@ class Car2HomeSensor(Car2HomeEntity, RestoreSensor, SensorEntity):
         # ValueError. Surface as None = unknown instead.
         if isinstance(value, str) and not value:
             return None
+
+        # Defense in depth: a sensor with numeric context (state_class set,
+        # numeric device_class, or a unit) MUST publish numeric values — HA
+        # raises ValueError mid-render otherwise, which propagates up through
+        # the WS view's finally block and tears the socket down (same failure
+        # mode the precision comment in __init__ describes). Happens in the
+        # wild when a descriptor declares state_class: measurement on a sensor
+        # that actually publishes text — e.g. sensor.corolla_cross_injection
+        # sending OBD enum labels like 'Direct' / 'Both'. Surface as unknown
+        # so the transport survives; the descriptor itself should be fixed
+        # app-side, but this keeps a misconfigured sensor from taking down
+        # every other entity on the same WS.
+        if isinstance(value, str) and self._numeric_required:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return None
 
         # Defense in depth: for enum sensors, a value outside the declared
         # options list makes HA raise ValueError during render; that exception
