@@ -1,5 +1,44 @@
-brands/icon.png
-brands/icon@2x.png
-brands/logo.png
-brands/logo@2x.png
-brands/README.md
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Python bytecode and venv
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.venv/
+venv/
+env/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Test / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# Build artifacts
+build/
+dist/
+*.egg
+
+# Secrets (defense in depth, in case anything ever lands here)
+.env
+.env.*
+*.pem
+*.key
+*.token
+secrets.json
+secrets.yaml
+credentials.json
