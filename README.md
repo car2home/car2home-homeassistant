@@ -1,11 +1,13 @@
 <p align="center">
-  <img src="icon.svg" alt="Car 2 Home" width="192" height="192" />
+  <img src="https://raw.githubusercontent.com/car2home/car2home-homeassistant/main/icon.svg" alt="Car 2 Home" width="192" />
 </p>
 
 # Car 2 Home for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
+https://img.shields.io/badge/obd2.svg
 
 A native Home Assistant custom integration that streams live OBD-II telemetry from the **Car 2 Home** mobile app (Android / iOS) straight into Home Assistant, with no MQTT broker, no Torque-style polling and no intermediate cloud.
 
