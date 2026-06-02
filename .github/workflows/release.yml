@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'custom_components/**'
+  workflow_dispatch:
+
+# Serialize releases on the same ref; never cancel a half-created release mid-flight.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so the commit count (PATCH) is correct
+
+      # MAJOR.MINOR comes from manifest.json (e.g. 0.1). PATCH is the total commit
+      # count (the "commit number"), so the version auto-advances on every release.
+      - name: Compute version
+        id: version
+        run: |
+          BASE="$(jq -r '.version' custom_components/car2home/manifest.json)"
+          MAJOR_MINOR="$(printf '%s' "$BASE" | cut -d. -f1,2)"
+          if [ -z "$MAJOR_MINOR" ] || [ "$BASE" = "null" ]; then
+            echo "::error::Could not read MAJOR.MINOR from custom_components/car2home/manifest.json"
+            exit 1
+          fi
+          PATCH="$(git rev-list --count HEAD)"
+          VERSION="${MAJOR_MINOR}.${PATCH}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Computed version $VERSION (base $BASE, PATCH = commit count $PATCH)"
+
+      - name: Check whether release already exists
+        id: check_release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release v${{ steps.version.outputs.version }} already exists, skipping."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Stamp the computed version into the manifest that goes INTO the zip only.
+      # The repo manifest stays as the MAJOR.MINOR template (e.g. 0.1.0); HACS installs
+      # from the zip, so users get the real version and entity.py reports it correctly.
+      - name: Stamp computed version into manifest (zip only, not committed)
+        if: steps.check_release.outputs.exists == 'false'
+        run: |
+          tmp="$(mktemp)"
+          jq --arg v "${{ steps.version.outputs.version }}" '.version = $v' \
+            custom_components/car2home/manifest.json > "$tmp"
+          mv "$tmp" custom_components/car2home/manifest.json
+
+      # zip_release in hacs.json expects the integration files at the archive root
+      # (manifest.json, __init__.py, translations/ ...), NOT wrapped in a car2home/ folder.
+      - name: Build integration zip (files at archive root)
+        if: steps.check_release.outputs.exists == 'false'
+        run: |
+          cd custom_components/car2home
+          zip -r "${{ github.workspace }}/car2home.zip" ./
+
+      - name: Create release
+        if: steps.check_release.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.version.outputs.version }}" \
+            --title "v${{ steps.version.outputs.version }}" \
+            --generate-notes \
+            "${{ github.workspace }}/car2home.zip"

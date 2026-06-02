@@ -1,7 +1,7 @@
 {
   "domain": "car2home",
   "name": "Car 2 Home",
-  "version": "0.1.10",
+  "version": "0.1.0",
   "documentation": "https://github.com/car2home/car2home-homeassistant",
   "issue_tracker": "https://github.com/car2home/car2home-homeassistant/issues",
   "codeowners": ["@car2home"],

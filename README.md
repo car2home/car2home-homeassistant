@@ -4,10 +4,13 @@
 
 # Car 2 Home for Home Assistant
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-
-https://img.shields.io/badge/obd2.svg
+[![HACS Custom][hacs_shield]][hacs]
+[![GitHub Latest Release][releases_shield]][latest_release]
+[![GitHub All Releases][downloads_shield]][releases]
+[![GitHub Discussions][discussions_shield]][discussions]
+[![HACS Validation][hacs_validate_shield]][actions]
+[![Validate with hassfest][hassfest_shield]][actions]
+[![License: Apache 2.0][license_shield]][license]
 
 A native Home Assistant custom integration that streams live OBD-II telemetry from the **Car 2 Home** mobile app (Android / iOS) straight into Home Assistant, with no MQTT broker, no Torque-style polling and no intermediate cloud.
 
@@ -264,3 +267,18 @@ Apache License 2.0, see [LICENSE](LICENSE).
 ## Credits
 
 Built to complement the **Car 2 Home** mobile app. Inspired in part by the architecture of other community OBD integrations (notably the Torque HTTP bridge), but designed from the ground up around a push-based, delta-efficient WebSocket protocol with full Home Assistant device-class coverage.
+
+<!-- Badge reference links -->
+[hacs_shield]: https://img.shields.io/badge/HACS-Custom-orange?style=popout&logo=HomeAssistantCommunityStore&logoColor=white
+[hacs]: https://hacs.xyz/docs/faq/custom_repositories
+[latest_release]: https://github.com/car2home/car2home-homeassistant/releases/latest
+[releases_shield]: https://img.shields.io/github/release/car2home/car2home-homeassistant.svg?style=popout
+[releases]: https://github.com/car2home/car2home-homeassistant/releases
+[downloads_shield]: https://img.shields.io/github/downloads/car2home/car2home-homeassistant/total?style=popout
+[discussions]: https://github.com/car2home/car2home-homeassistant/discussions
+[discussions_shield]: https://img.shields.io/github/discussions/car2home/car2home-homeassistant?style=popout&logo=github
+[actions]: https://github.com/car2home/car2home-homeassistant/actions
+[hacs_validate_shield]: https://github.com/car2home/car2home-homeassistant/actions/workflows/hacs.yml/badge.svg
+[hassfest_shield]: https://github.com/car2home/car2home-homeassistant/actions/workflows/hassfest.yml/badge.svg
+[license_shield]: https://img.shields.io/badge/License-Apache_2.0-blue.svg
+[license]: LICENSE
