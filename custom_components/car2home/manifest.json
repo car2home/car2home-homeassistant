@@ -1,15 +1,15 @@
 {
   "domain": "car2home",
   "name": "Car 2 Home",
-  "version": "0.1.0",
-  "documentation": "https://github.com/car2home/car2home-homeassistant",
-  "issue_tracker": "https://github.com/car2home/car2home-homeassistant/issues",
   "codeowners": ["@car2home"],
   "config_flow": true,
+  "dependencies": ["http", "zeroconf"],
+  "documentation": "https://github.com/car2home/car2home-homeassistant",
   "integration_type": "hub",
   "iot_class": "local_push",
+  "issue_tracker": "https://github.com/car2home/car2home-homeassistant/issues",
+  "loggers": ["custom_components.car2home"],
   "requirements": [],
-  "dependencies": ["http", "zeroconf"],
-  "zeroconf": [{ "type": "_car2home._tcp.local." }],
-  "loggers": ["custom_components.car2home"]
+  "version": "0.1.0",
+  "zeroconf": [{ "type": "_car2home._tcp.local." }]
 }

@@ -5,12 +5,15 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import config_validation as cv
 
 from .api import Car2HomeIngestView, Car2HomePairView, Car2HomeWsView, PairingManager
 from .const import DOMAIN, PLATFORMS
 from .coordinator import Car2HomeCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 @callback
