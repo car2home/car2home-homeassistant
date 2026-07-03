@@ -19,6 +19,7 @@ from .const import (
     CONF_HW_VERSION,
     CONF_MANUFACTURER,
     CONF_MODEL,
+    CONF_NICKNAME,
     CONF_VIN,
     DOMAIN,
     MANUFACTURER_DEFAULT,
@@ -47,8 +48,9 @@ class Car2HomeEntity(CoordinatorEntity[Car2HomeCoordinator]):
         self._sensor_id = sensor_id
 
         data = coordinator.entry.data
+        nickname = data.get(CONF_NICKNAME)
         device_slug = data.get(CONF_DEVICE_SLUG) or build_base_slug(
-            data.get(CONF_MANUFACTURER), data.get(CONF_MODEL)
+            data.get(CONF_MANUFACTURER), data.get(CONF_MODEL), nickname
         )
         vin = data.get(CONF_VIN)
 
@@ -62,11 +64,15 @@ class Car2HomeEntity(CoordinatorEntity[Car2HomeCoordinator]):
             identifiers.add((DOMAIN, f"vin:{vin}"))
 
         model = data.get(CONF_MODEL) or "Vehicle"
+        # Fold the nickname into the device name so two cars of the same model
+        # (e.g. two Corolla Cross) show as "Corolla Cross · Meu" / "· Esposa"
+        # instead of two identical "Corolla Cross" devices.
+        name = f"{model} · {nickname}" if nickname else model
         self._attr_device_info = DeviceInfo(
             identifiers=identifiers,
             manufacturer=data.get(CONF_MANUFACTURER) or MANUFACTURER_DEFAULT,
             model=model,
-            name=model,
+            name=name,
             sw_version=_MANIFEST_VERSION,
             hw_version=data.get(CONF_HW_VERSION),
         )

@@ -17,6 +17,7 @@
     },
     "abort": {
       "already_configured": "This vehicle is already configured.",
+      "device_linked": "This device was linked to the vehicle already configured.",
       "invalid_or_expired_code": "The pairing code was not accepted by the app. Start a new pairing.",
       "timeout": "Pairing timed out — the code expired before the app confirmed.",
       "unknown": "Unexpected error during pairing."

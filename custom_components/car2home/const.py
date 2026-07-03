@@ -25,9 +25,12 @@ PING_INTERVAL_SEC = 20
 STALE_THRESHOLD_SEC = 120
 
 CONF_VIN = "vin"
-CONF_DEVICE_ID = "device_id"
-CONF_DEVICE_SLUG = "device_slug"  # car2home_{manufacturer}_{model}[_{N}], stable HA identifier
-CONF_TOKEN = "token"
+CONF_DEVICE_ID = "device_id"  # stable per-car GUID (CarProfile.Id), unique at pair time
+CONF_DEVICE_SLUG = "device_slug"  # car2home_{manufacturer}_{model}[_{nickname}][_{N}], stable HA identifier
+CONF_TOKEN = "token"  # legacy single token; superseded by CONF_TOKENS (kept for back-compat)
+CONF_TOKENS = "tokens"  # {client_id: token} — one per paired phone
+CONF_CLIENT_ID = "client_id"  # per-phone install id keying the token map
+CONF_NICKNAME = "nickname"  # user-set car nickname, folded into the device name / slug
 CONF_LOCAL_URL = "local_url"
 CONF_REMOTE_URL = "remote_url"
 CONF_HOME_SSID = "home_ssid"

@@ -25,13 +25,16 @@ from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    CONF_CLIENT_ID,
     CONF_DEVICE_ID,
     CONF_DEVICE_SLUG,
     CONF_HW_VERSION,
     CONF_MANUFACTURER,
     CONF_MODEL,
+    CONF_NICKNAME,
     CONF_SW_VERSION,
     CONF_TOKEN,
+    CONF_TOKENS,
     CONF_VIN,
     DOMAIN,
     FRAME_ACK,
@@ -111,8 +114,13 @@ class PairingManager:
         ws_url = self._build_ws_url()
         entry_payload = {
             CONF_TOKEN: token,
-            CONF_VIN: payload.get("vin") or payload.get("device_id"),
+            # VIN is empty at pair time (the ECU reports it later); do NOT fall
+            # back to device_id here — that conflation made unique_id the model
+            # slug and collided distinct cars. device_id is the stable car GUID.
+            CONF_VIN: payload.get("vin"),
             CONF_DEVICE_ID: payload.get("device_id"),
+            CONF_CLIENT_ID: payload.get("client_id"),
+            CONF_NICKNAME: payload.get("nickname"),
             CONF_MANUFACTURER: payload.get("manufacturer"),
             CONF_MODEL: payload.get("model"),
             CONF_SW_VERSION: payload.get("sw_version"),
@@ -178,12 +186,21 @@ class Car2HomePairView(HomeAssistantView):
 def _find_coordinator_by_token(
     hass: HomeAssistant, token: str
 ) -> Car2HomeCoordinator | None:
+    # Each entry now holds a set of tokens (one per paired phone) plus, for
+    # backward compatibility, the legacy single CONF_TOKEN. Check them all;
+    # don't early-exit on the first mismatch so timing stays uniform.
+    match: Car2HomeCoordinator | None = None
     for entry_id, value in hass.data.get(DOMAIN, {}).items():
         if not isinstance(value, Car2HomeCoordinator):
             continue
-        if hmac.compare_digest(value.entry.data.get(CONF_TOKEN, ""), token):
-            return value
-    return None
+        candidates = list((value.entry.data.get(CONF_TOKENS) or {}).values())
+        legacy = value.entry.data.get(CONF_TOKEN)
+        if legacy:
+            candidates.append(legacy)
+        for candidate in candidates:
+            if candidate and hmac.compare_digest(candidate, token):
+                match = value
+    return match
 
 
 class Car2HomeWsView(HomeAssistantView):

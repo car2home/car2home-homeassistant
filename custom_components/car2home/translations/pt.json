@@ -17,6 +17,7 @@
     },
     "abort": {
       "already_configured": "Este veículo já está configurado.",
+      "device_linked": "Este dispositivo foi vinculado ao veículo já configurado.",
       "invalid_or_expired_code": "O código não foi aceite pela app. Inicia um novo emparelhamento.",
       "timeout": "Tempo esgotado — o código expirou antes da app confirmar.",
       "unknown": "Erro inesperado durante o emparelhamento."

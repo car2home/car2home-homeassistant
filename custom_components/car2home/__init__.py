@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv
 
 from .api import Car2HomeIngestView, Car2HomePairView, Car2HomeWsView, PairingManager
-from .const import DOMAIN, PLATFORMS
+from .const import CONF_TOKEN, CONF_TOKENS, DOMAIN, PLATFORMS
 from .coordinator import Car2HomeCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -40,6 +40,25 @@ def _ensure_global_setup(hass: HomeAssistant) -> None:
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the Car 2 Home integration (global)."""
     _ensure_global_setup(hass)
+    return True
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate a config entry to the multi-token shape (v1 → v2).
+
+    v1 stored a single ``token``; v2 stores a ``tokens`` map keyed by the paired
+    phone's client_id. We seed the map from the legacy token and KEEP the legacy
+    ``token`` key so an existing paired phone keeps authenticating with no
+    re-pair (``_find_coordinator_by_token`` still matches it).
+    """
+    if entry.version == 1:
+        tokens: dict[str, str] = {}
+        legacy = entry.data.get(CONF_TOKEN)
+        if legacy:
+            tokens["default"] = legacy
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_TOKENS: tokens}, version=2
+        )
     return True
 
 

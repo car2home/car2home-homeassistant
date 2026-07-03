@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import timedelta
 from typing import Any
 
@@ -33,16 +34,20 @@ from homeassistant.util import dt as dt_util
 from . import _ensure_global_setup
 from .api import PairingManager
 from .const import (
+    CONF_CLIENT_ID,
     CONF_DEVICE_ID,
     CONF_DEVICE_SLUG,
     CONF_MANUFACTURER,
     CONF_MODEL,
+    CONF_NICKNAME,
     CONF_SW_VERSION,
+    CONF_TOKEN,
+    CONF_TOKENS,
     CONF_VIN,
     DOMAIN,
     PAIRING_CODE_TTL_SEC,
 )
-from .slug import build_unique_slug
+from .slug import build_base_slug, build_unique_slug
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,7 +55,7 @@ _LOGGER = logging.getLogger(__name__)
 class Car2HomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Pair-by-code config flow with auto-advance when the app confirms."""
 
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self) -> None:
         self._discovery: dict[str, Any] = {}
@@ -80,20 +85,22 @@ class Car2HomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         _ensure_global_setup(self.hass)
         properties = discovery_info.properties or {}
         device_id = properties.get("device_id") or discovery_info.name
-        vin = properties.get("vin") or device_id
         model = properties.get("model") or "Car 2 Home"
         manufacturer = properties.get("manufacturer") or "Car 2 Home"
 
-        await self.async_set_unique_id(vin)
+        # Identity is the stable per-car device_id (the car GUID), NOT the VIN
+        # (empty at pair time). Same car rediscovered → already configured.
+        await self.async_set_unique_id(device_id)
         self._abort_if_unique_id_configured()
 
         self._discovery = {
             "host": str(discovery_info.host),
             "port": discovery_info.port,
             CONF_DEVICE_ID: device_id,
-            CONF_VIN: vin,
+            CONF_VIN: properties.get("vin"),
             CONF_MODEL: model,
             CONF_MANUFACTURER: manufacturer,
+            CONF_NICKNAME: properties.get("nickname"),
             CONF_SW_VERSION: properties.get("sw"),
         }
         self.context["title_placeholders"] = {"name": f"{model}"}
@@ -200,27 +207,100 @@ class Car2HomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason=self._pair_error or "unknown")
 
         result = self._pair_result
-        vin = result.get(CONF_VIN) or self._discovery.get(CONF_VIN)
         manufacturer = (
             result.get(CONF_MANUFACTURER) or self._discovery.get(CONF_MANUFACTURER)
         )
         model = result.get(CONF_MODEL) or self._discovery.get(CONF_MODEL)
+        nickname = result.get(CONF_NICKNAME) or self._discovery.get(CONF_NICKNAME)
+        device_id = result.get(CONF_DEVICE_ID) or self._discovery.get(CONF_DEVICE_ID)
 
         existing_slugs = {
             e.data.get(CONF_DEVICE_SLUG)
             for e in self._async_current_entries()
             if e.data.get(CONF_DEVICE_SLUG)
         }
-        device_slug = build_unique_slug(manufacturer, model, existing_slugs)
+        device_slug = build_unique_slug(manufacturer, model, nickname, existing_slugs)
 
-        unique_id = vin if vin else device_slug
+        # Identity is the stable per-car GUID (device_id); the deduped slug is only
+        # a fallback when the phone has no car profile yet. VIN is NOT used for
+        # uniqueness (empty at pair time) — it becomes a secondary device
+        # identifier once the ECU reports it (see coordinator.handle_hello).
+        unique_id = device_id or device_slug
         await self.async_set_unique_id(unique_id, raise_on_progress=False)
-        self._abort_if_unique_id_configured()
 
-        title = f"{model or 'Car 2 Home'}"
-        if vin:
-            title = f"{title} ({vin})"
+        title = f"{model} · {nickname}" if nickname else (model or "Car 2 Home")
+
+        # Same car already configured (a second phone, or a re-pair) → append this
+        # device's token to the existing entry instead of aborting.
+        existing = next(
+            (e for e in self._async_current_entries() if e.unique_id == unique_id),
+            None,
+        )
+
+        # Legacy-entry bridge: pre-v2 entries have unique_id = model slug (from the
+        # old empty-VIN bug). If this car GUID matches nothing but exactly ONE
+        # legacy entry (no recorded device_id) shares the base slug, adopt it.
+        adopt_unique_id: str | None = None
+        if existing is None and device_id:
+            # Pre-v2 slugs were built WITHOUT the nickname, so match against the
+            # nickname-free base; accept only the exact base or a numeric dedup
+            # suffix (`_2`), never a `_nickname` tail — that would wrongly adopt a
+            # different car of the same model.
+            base = build_base_slug(manufacturer, model)
+            legacy = [
+                e
+                for e in self._async_current_entries()
+                if not e.data.get(CONF_DEVICE_ID)
+                # Same model string too, so a numeric-suffixed sibling MODEL (e.g.
+                # "GLC 300" vs "GLC", slug ..._glc_300) isn't mistaken for a "_2"
+                # dedup suffix of this car.
+                and (e.data.get(CONF_MODEL) or "") == (model or "")
+                and (
+                    (e.data.get(CONF_DEVICE_SLUG) or "") == base
+                    or re.fullmatch(rf"{re.escape(base)}_\d+", e.data.get(CONF_DEVICE_SLUG) or "")
+                )
+            ]
+            if len(legacy) == 1:
+                existing = legacy[0]
+                adopt_unique_id = unique_id
+
+        if existing is not None:
+            self._append_token(existing, result, adopt_unique_id)
+            return self.async_abort(reason="device_linked")
+
+        client_id = result.get(CONF_CLIENT_ID) or "default"
         return self.async_create_entry(
             title=title,
-            data={**self._discovery, **result, CONF_DEVICE_SLUG: device_slug},
+            data={
+                **self._discovery,
+                **result,
+                CONF_DEVICE_SLUG: device_slug,
+                CONF_TOKENS: {client_id: result[CONF_TOKEN]},
+            },
         )
+
+    def _append_token(
+        self,
+        entry: config_entries.ConfigEntry,
+        result: dict[str, Any],
+        adopt_unique_id: str | None = None,
+    ) -> None:
+        """Add this phone's token to an existing entry (multi-device), migrating a
+        legacy single token into the map. Optionally adopt the entry's identity to
+        the car GUID (legacy-entry bridge). No reload: token matching reads
+        entry.data live, so an already-connected phone is not disconnected."""
+        tokens = dict(entry.data.get(CONF_TOKENS) or {})
+        legacy = entry.data.get(CONF_TOKEN)
+        if not tokens and legacy:
+            tokens["default"] = legacy
+        client_id = result.get(CONF_CLIENT_ID) or "default"
+        tokens[client_id] = result[CONF_TOKEN]
+
+        new_data = {**entry.data, CONF_TOKENS: tokens}
+        if result.get(CONF_DEVICE_ID):
+            new_data[CONF_DEVICE_ID] = result[CONF_DEVICE_ID]
+
+        update: dict[str, Any] = {"data": new_data}
+        if adopt_unique_id and adopt_unique_id != entry.unique_id:
+            update["unique_id"] = adopt_unique_id
+        self.hass.config_entries.async_update_entry(entry, **update)

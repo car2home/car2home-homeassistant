@@ -1,8 +1,9 @@
 """Device slug builder — mirrors the app's Mqtt naming convention.
 
-Identifier format: `car2home_{manufacturer}_{model}[_{N}]`
+Identifier format: `car2home_{manufacturer}_{model}[_{nickname}][_{N}]`
   - lowercase
   - non-alphanumeric characters collapsed to underscores
+  - nickname (when set) distinguishes same-model cars
   - if the same slug already exists for another ConfigEntry, append `_2`, `_3`, ...
 
 This is the canonical HA device identifier AND the prefix of every entity's
@@ -27,14 +28,23 @@ def slugify_part(value: str | None) -> str:
     return s
 
 
-def build_base_slug(manufacturer: str | None, model: str | None) -> str:
+def build_base_slug(
+    manufacturer: str | None,
+    model: str | None,
+    nickname: str | None = None,
+) -> str:
     parts = [DEVICE_SLUG_PREFIX]
     mfg = slugify_part(manufacturer)
     mdl = slugify_part(model)
+    nick = slugify_part(nickname)
     if mfg:
         parts.append(mfg)
     if mdl:
         parts.append(mdl)
+    # Nickname distinguishes two cars of the same model (e.g. two Corolla Cross)
+    # so the slug/entity_ids read as `..._corolla_cross_meu` instead of `..._2`.
+    if nick:
+        parts.append(nick)
     if len(parts) == 1:
         parts.append("vehicle")
     return "_".join(parts)
@@ -43,10 +53,11 @@ def build_base_slug(manufacturer: str | None, model: str | None) -> str:
 def build_unique_slug(
     manufacturer: str | None,
     model: str | None,
+    nickname: str | None,
     existing_slugs: Iterable[str],
 ) -> str:
     """Return a slug unique within ``existing_slugs`` by appending _2/_3/... if needed."""
-    base = build_base_slug(manufacturer, model)
+    base = build_base_slug(manufacturer, model, nickname)
     taken = set(existing_slugs)
     if base not in taken:
         return base

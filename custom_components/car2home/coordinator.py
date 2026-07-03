@@ -11,6 +11,8 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
+    CONF_NICKNAME,
+    CONF_VIN,
     DOMAIN,
     SIGNAL_AVAILABILITY,
     SIGNAL_LOCATION,
@@ -74,6 +76,39 @@ class Car2HomeCoordinator(DataUpdateCoordinator):
         self.data["ws_connected"] = True
         self.async_set_updated_data(self.data)
         async_dispatcher_send(self.hass, SIGNAL_NEW_DESCRIPTOR, self.entry.entry_id)
+        self._maybe_adopt_device_info(frame)
+
+    @callback
+    def _maybe_adopt_device_info(self, frame: dict[str, Any]) -> None:
+        """Fold in device details only known after the ECU connects.
+
+        - VIN: empty at pair time; once reported, store it (entity.py adds the
+          ``vin:`` secondary identifier on the next entry setup).
+        - Nickname: store a rename.
+
+        Only PERSISTS to entry.data — it does NOT reload the entry. A live
+        WebSocket is bound to THIS coordinator instance (api.py resolves the
+        coordinator once and dispatches every frame to it); reloading would
+        unload this coordinator, orphan the still-open socket, and rebuild a
+        coordinator with no descriptor (zero entities). The refreshed device name
+        / vin identifier therefore take effect on the next natural entry setup
+        (HA restart or manual reload), which is fine — the nickname is already
+        applied at pair time and the VIN identifier is only a dedup nicety.
+        unique_id (the car GUID) is never touched, so no collision is possible.
+        """
+        device = frame.get("device") or {}
+        updates: dict[str, Any] = {}
+        vin = (device.get("vin") or "").strip()
+        if vin and vin != (self.entry.data.get(CONF_VIN) or ""):
+            updates[CONF_VIN] = vin
+        nickname = (device.get("nickname") or "").strip()
+        if nickname and nickname != (self.entry.data.get(CONF_NICKNAME) or ""):
+            updates[CONF_NICKNAME] = nickname
+        if not updates:
+            return
+        self.hass.config_entries.async_update_entry(
+            self.entry, data={**self.entry.data, **updates}
+        )
 
     @callback
     def handle_state(self, frame: dict[str, Any]) -> None:
