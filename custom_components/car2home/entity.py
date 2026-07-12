@@ -47,18 +47,19 @@ class Car2HomeEntity(CoordinatorEntity[Car2HomeCoordinator]):
         self._sensor_id = sensor_id
         self._target_id = str(target_ctx.get("id"))
 
-        vin = (target_ctx.get("vin") or "").strip()
         model = target_ctx.get("model") or "Vehicle"
         nickname = target_ctx.get("nickname")
 
         self._attr_unique_id = f"{self._target_id}_{sensor_id}"
 
-        # Device identity is the immutable target id. VIN (when present) is a
-        # secondary identifier so the registry dedups across a re-pair that
-        # reports the same car.
+        # Device identity is the immutable target id ONLY. Never add the VIN as
+        # a secondary identifier: HA's device registry MERGES devices that share
+        # any identifier, and two car profiles can legitimately carry the same
+        # VIN (e.g. two profiles connected to the same physical car during
+        # testing, or a VIN stamped onto the wrong active profile). That merge
+        # collapsed two cars into one device in the wild. VIN stays available in
+        # the target catalogue for event enrichment.
         identifiers = {(DOMAIN, self._target_id)}
-        if vin:
-            identifiers.add((DOMAIN, f"vin:{vin}"))
 
         # Fold the nickname into the device name so two cars of the same model
         # show as "Corolla Cross · Meu" / "· Esposa" instead of two identical
