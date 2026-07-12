@@ -9,7 +9,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, SIGNAL_LOCATION, SIGNAL_NEW_DESCRIPTOR
 from .coordinator import Car2HomeCoordinator
-from .entity import Car2HomeEntity, describe_from_frame
+from .entity import Car2HomeEntity, iter_target_descriptors
 
 
 async def async_setup_entry(
@@ -18,22 +18,20 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: Car2HomeCoordinator = hass.data[DOMAIN][entry.entry_id]
-    known: set[str] = set()
+    known: set[tuple[str, str]] = set()
 
     @callback
     def _add_from_descriptor(entry_id: str | None = None) -> None:
         if entry_id is not None and entry_id != coordinator.entry.entry_id:
             return
-        descriptor = coordinator.data.get("descriptor")
-        if not descriptor:
-            return
         new_entities: list[Car2HomeTracker] = []
-        for desc in describe_from_frame(descriptor, "device_tracker"):
+        for target_ctx, desc in iter_target_descriptors(coordinator.data, "device_tracker"):
             sensor_id = desc.get("id")
-            if not sensor_id or sensor_id in known:
+            key = (str(target_ctx.get("id")), sensor_id)
+            if not sensor_id or key in known:
                 continue
-            known.add(sensor_id)
-            new_entities.append(Car2HomeTracker(coordinator, sensor_id, desc))
+            known.add(key)
+            new_entities.append(Car2HomeTracker(coordinator, target_ctx, sensor_id, desc))
         if new_entities:
             async_add_entities(new_entities)
 
@@ -49,15 +47,17 @@ class Car2HomeTracker(Car2HomeEntity, TrackerEntity):
     def __init__(
         self,
         coordinator: Car2HomeCoordinator,
+        target_ctx: dict,
         sensor_id: str,
         desc: dict,
     ) -> None:
-        super().__init__(coordinator, sensor_id)
+        super().__init__(coordinator, target_ctx, sensor_id)
         self._attr_name = desc.get("name") or "Phone"
         self._attr_translation_key = desc.get("translation_key") or sensor_id
 
     def _loc(self) -> dict:
-        return self.coordinator.data.get("location") or {}
+        # Phone GPS is stored under this target's namespace (the garage hub).
+        return self.coordinator.data.get("location", {}).get(self._target_id) or {}
 
     @property
     def latitude(self) -> float | None:

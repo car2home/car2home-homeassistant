@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from datetime import timedelta
 from typing import Any
 
@@ -37,17 +36,22 @@ from .const import (
     CONF_CLIENT_ID,
     CONF_DEVICE_ID,
     CONF_DEVICE_SLUG,
+    CONF_GARAGE_ID,
     CONF_MANUFACTURER,
     CONF_MODEL,
     CONF_NICKNAME,
     CONF_SW_VERSION,
+    CONF_TARGETS,
     CONF_TOKEN,
     CONF_TOKENS,
     CONF_VIN,
     DOMAIN,
+    MANUFACTURER_DEFAULT,
     PAIRING_CODE_TTL_SEC,
+    TARGET_KIND_CAR,
+    TARGET_KIND_GARAGE,
 )
-from .slug import build_base_slug, build_unique_slug
+from .slug import build_unique_slug
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -55,7 +59,7 @@ _LOGGER = logging.getLogger(__name__)
 class Car2HomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Pair-by-code config flow with auto-advance when the app confirms."""
 
-    VERSION = 2
+    VERSION = 3
 
     def __init__(self) -> None:
         self._discovery: dict[str, Any] = {}
@@ -202,7 +206,7 @@ class Car2HomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_finish(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Finalize: create the ConfigEntry or abort with a clean reason."""
+        """Finalize: create the garage ConfigEntry or link a phone/car to it."""
         if self._pair_error or not self._pair_result:
             return self.async_abort(reason=self._pair_error or "unknown")
 
@@ -214,59 +218,52 @@ class Car2HomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         nickname = result.get(CONF_NICKNAME) or self._discovery.get(CONF_NICKNAME)
         device_id = result.get(CONF_DEVICE_ID) or self._discovery.get(CONF_DEVICE_ID)
 
-        existing_slugs = {
-            e.data.get(CONF_DEVICE_SLUG)
-            for e in self._async_current_entries()
-            if e.data.get(CONF_DEVICE_SLUG)
-        }
-        device_slug = build_unique_slug(manufacturer, model, nickname, existing_slugs)
-
-        # Identity is the stable per-car GUID (device_id); the deduped slug is only
-        # a fallback when the phone has no car profile yet. VIN is NOT used for
-        # uniqueness (empty at pair time) — it becomes a secondary device
-        # identifier once the ECU reports it (see coordinator.handle_hello).
-        unique_id = device_id or device_slug
-        await self.async_set_unique_id(unique_id, raise_on_progress=False)
+        # Garage identity is the config-entry unique_id: acct_{sub} (signed in)
+        # or dev_{clientId}. Two phones of one account compute the same value and
+        # share one garage. Fall back to the car GUID / client id if an older app
+        # doesn't send it (that phone just gets its own single-car garage).
+        garage_id = (
+            result.get(CONF_GARAGE_ID)
+            or device_id
+            or result.get(CONF_CLIENT_ID)
+            or "car2home"
+        )
+        await self.async_set_unique_id(garage_id, raise_on_progress=False)
 
         title = f"{model} · {nickname}" if nickname else (model or "Car 2 Home")
 
-        # Same car already configured (a second phone, or a re-pair) → append this
-        # device's token to the existing entry instead of aborting.
+        # Same garage already configured (a second phone of the same account, or a
+        # re-pair of the same phone) → link into it instead of creating a duplicate.
         existing = next(
-            (e for e in self._async_current_entries() if e.unique_id == unique_id),
+            (e for e in self._async_current_entries() if e.unique_id == garage_id),
             None,
         )
-
-        # Legacy-entry bridge: pre-v2 entries have unique_id = model slug (from the
-        # old empty-VIN bug). If this car GUID matches nothing but exactly ONE
-        # legacy entry (no recorded device_id) shares the base slug, adopt it.
-        adopt_unique_id: str | None = None
-        if existing is None and device_id:
-            # Pre-v2 slugs were built WITHOUT the nickname, so match against the
-            # nickname-free base; accept only the exact base or a numeric dedup
-            # suffix (`_2`), never a `_nickname` tail — that would wrongly adopt a
-            # different car of the same model.
-            base = build_base_slug(manufacturer, model)
-            legacy = [
-                e
-                for e in self._async_current_entries()
-                if not e.data.get(CONF_DEVICE_ID)
-                # Same model string too, so a numeric-suffixed sibling MODEL (e.g.
-                # "GLC 300" vs "GLC", slug ..._glc_300) isn't mistaken for a "_2"
-                # dedup suffix of this car.
-                and (e.data.get(CONF_MODEL) or "") == (model or "")
-                and (
-                    (e.data.get(CONF_DEVICE_SLUG) or "") == base
-                    or re.fullmatch(rf"{re.escape(base)}_\d+", e.data.get(CONF_DEVICE_SLUG) or "")
-                )
-            ]
-            if len(legacy) == 1:
-                existing = legacy[0]
-                adopt_unique_id = unique_id
-
         if existing is not None:
-            self._append_token(existing, result, adopt_unique_id)
+            self._link_to_garage(existing, result, device_id, manufacturer, model, nickname)
             return self.async_abort(reason="device_linked")
+
+        # Fresh garage: seed the target catalogue with the stable garage-hub
+        # device plus the paired car. Remaining cars arrive in the first hello.
+        car_slug = build_unique_slug(manufacturer, model, nickname, set())
+        targets = {
+            garage_id: {
+                "kind": TARGET_KIND_GARAGE,
+                "id": garage_id,
+                "device_slug": "car2home",
+                "model": "Garage",
+                "manufacturer": MANUFACTURER_DEFAULT,
+                "name": "Car 2 Home",
+                "nickname": None,
+                "vin": None,
+            },
+        }
+        # Guard: if an older app omitted garage_id, garage_id falls back to
+        # device_id — don't let the car target overwrite the garage target under
+        # the same key (that would attach ws_connected/switch to the car device).
+        if device_id and device_id != garage_id:
+            targets[device_id] = self._car_target(
+                device_id, car_slug, manufacturer, model, nickname, result.get(CONF_VIN)
+            )
 
         client_id = result.get(CONF_CLIENT_ID) or "default"
         return self.async_create_entry(
@@ -274,21 +271,49 @@ class Car2HomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data={
                 **self._discovery,
                 **result,
-                CONF_DEVICE_SLUG: device_slug,
+                CONF_GARAGE_ID: garage_id,
+                CONF_DEVICE_SLUG: car_slug,
+                CONF_TARGETS: targets,
                 CONF_TOKENS: {client_id: result[CONF_TOKEN]},
             },
         )
 
-    def _append_token(
+    @staticmethod
+    def _car_target(
+        car_id: str,
+        slug: str,
+        manufacturer: str | None,
+        model: str | None,
+        nickname: str | None,
+        vin: str | None,
+    ) -> dict[str, Any]:
+        return {
+            "kind": TARGET_KIND_CAR,
+            "id": car_id,
+            "device_slug": slug,
+            "model": model or "Vehicle",
+            "manufacturer": manufacturer or MANUFACTURER_DEFAULT,
+            "nickname": nickname or None,
+            "vin": (vin or "").strip() or None,
+            "is_primary": True,
+        }
+
+    def _link_to_garage(
         self,
         entry: config_entries.ConfigEntry,
         result: dict[str, Any],
-        adopt_unique_id: str | None = None,
+        device_id: str | None,
+        manufacturer: str | None,
+        model: str | None,
+        nickname: str | None,
     ) -> None:
-        """Add this phone's token to an existing entry (multi-device), migrating a
-        legacy single token into the map. Optionally adopt the entry's identity to
-        the car GUID (legacy-entry bridge). No reload: token matching reads
-        entry.data live, so an already-connected phone is not disconnected."""
+        """Link a phone (and its active car) to an existing garage entry.
+
+        Adds this phone's token to the map and seeds the car target if it isn't
+        already known. No reload: token matching reads entry.data live, so an
+        already-connected phone is not disconnected. The full car catalogue is
+        rebuilt from the next hello regardless.
+        """
         tokens = dict(entry.data.get(CONF_TOKENS) or {})
         legacy = entry.data.get(CONF_TOKEN)
         if not tokens and legacy:
@@ -297,10 +322,16 @@ class Car2HomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         tokens[client_id] = result[CONF_TOKEN]
 
         new_data = {**entry.data, CONF_TOKENS: tokens}
-        if result.get(CONF_DEVICE_ID):
-            new_data[CONF_DEVICE_ID] = result[CONF_DEVICE_ID]
 
-        update: dict[str, Any] = {"data": new_data}
-        if adopt_unique_id and adopt_unique_id != entry.unique_id:
-            update["unique_id"] = adopt_unique_id
-        self.hass.config_entries.async_update_entry(entry, **update)
+        targets = dict(entry.data.get(CONF_TARGETS) or {})
+        if device_id and device_id not in targets:
+            existing_slugs = {
+                t.get("device_slug") for t in targets.values() if t.get("device_slug")
+            }
+            slug = build_unique_slug(manufacturer, model, nickname, existing_slugs)
+            targets[device_id] = self._car_target(
+                device_id, slug, manufacturer, model, nickname, result.get(CONF_VIN)
+            )
+            new_data[CONF_TARGETS] = targets
+
+        self.hass.config_entries.async_update_entry(entry, data=new_data)

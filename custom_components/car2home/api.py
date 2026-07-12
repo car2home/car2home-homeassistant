@@ -28,11 +28,13 @@ from .const import (
     CONF_CLIENT_ID,
     CONF_DEVICE_ID,
     CONF_DEVICE_SLUG,
+    CONF_GARAGE_ID,
     CONF_HW_VERSION,
     CONF_MANUFACTURER,
     CONF_MODEL,
     CONF_NICKNAME,
     CONF_SW_VERSION,
+    CONF_TARGETS,
     CONF_TOKEN,
     CONF_TOKENS,
     CONF_VIN,
@@ -125,6 +127,9 @@ class PairingManager:
             CONF_MODEL: payload.get("model"),
             CONF_SW_VERSION: payload.get("sw_version"),
             CONF_HW_VERSION: payload.get("hw_version"),
+            # Garage identity: acct_{sub} (signed in) or dev_{clientId}. Becomes
+            # the config-entry unique_id so two phones of one account share it.
+            CONF_GARAGE_ID: payload.get("garage_id"),
         }
         if pending.result and not pending.result.done():
             pending.result.set_result(entry_payload)
@@ -186,21 +191,33 @@ class Car2HomePairView(HomeAssistantView):
 def _find_coordinator_by_token(
     hass: HomeAssistant, token: str
 ) -> Car2HomeCoordinator | None:
-    # Each entry now holds a set of tokens (one per paired phone) plus, for
-    # backward compatibility, the legacy single CONF_TOKEN. Check them all;
-    # don't early-exit on the first mismatch so timing stays uniform.
+    coord, _ = _resolve_token(hass, token)
+    return coord
+
+
+def _resolve_token(
+    hass: HomeAssistant, token: str
+) -> tuple[Car2HomeCoordinator | None, str | None]:
+    """Resolve a token to its coordinator AND the paired phone's client_id.
+
+    The client_id keys the per-phone WS registry so a garage shared by two
+    phones keeps both sockets. Legacy single-token entries resolve to the
+    ``"default"`` client_id. Doesn't early-exit on mismatch (uniform timing).
+    """
     match: Car2HomeCoordinator | None = None
+    match_client: str | None = None
     for entry_id, value in hass.data.get(DOMAIN, {}).items():
         if not isinstance(value, Car2HomeCoordinator):
             continue
-        candidates = list((value.entry.data.get(CONF_TOKENS) or {}).values())
-        legacy = value.entry.data.get(CONF_TOKEN)
-        if legacy:
-            candidates.append(legacy)
-        for candidate in candidates:
+        for client_id, candidate in (value.entry.data.get(CONF_TOKENS) or {}).items():
             if candidate and hmac.compare_digest(candidate, token):
                 match = value
-    return match
+                match_client = client_id
+        legacy = value.entry.data.get(CONF_TOKEN)
+        if legacy and hmac.compare_digest(legacy, token):
+            match = value
+            match_client = match_client or "default"
+    return match, match_client
 
 
 class Car2HomeWsView(HomeAssistantView):
@@ -215,17 +232,25 @@ class Car2HomeWsView(HomeAssistantView):
 
     async def get(self, request: web.Request) -> web.StreamResponse:
         token = request.query.get("token") or ""
-        coord = _find_coordinator_by_token(self._hass, token)
+        coord, client_id = _resolve_token(self._hass, token)
         if not coord:
             return web.Response(status=401, text="unauthorized")
+        client_id = client_id or "default"
 
         ws = web.WebSocketResponse(heartbeat=30)
         await ws.prepare(request)
         coord.set_ws_connected(True)
-        # Register the live WS so other platforms (switch, services) can push
-        # commands back to the app via this same socket.
-        self._hass.data.setdefault(DOMAIN, {})[f"_ws_{coord.entry.entry_id}"] = ws
-        _LOGGER.info("car2home WS connected for entry %s", coord.entry.entry_id)
+        # Register the live WS keyed by the paired phone's client_id. A garage
+        # shared by two phones keeps BOTH sockets — a single slot would let one
+        # phone overwrite the other's socket and drop its commands.
+        registry = self._hass.data.setdefault(DOMAIN, {}).setdefault(
+            f"_ws_{coord.entry.entry_id}", {}
+        )
+        registry[client_id] = ws
+        _LOGGER.info(
+            "car2home WS connected for entry %s (client %s)",
+            coord.entry.entry_id, client_id,
+        )
 
         try:
             async for msg in ws:
@@ -236,8 +261,15 @@ class Car2HomeWsView(HomeAssistantView):
                     break
         finally:
             coord.set_ws_connected(False)
-            self._hass.data.get(DOMAIN, {}).pop(f"_ws_{coord.entry.entry_id}", None)
-            _LOGGER.info("car2home WS disconnected for entry %s", coord.entry.entry_id)
+            # Remove only THIS phone's socket (identity check guards against a
+            # reconnect race that already replaced our slot).
+            reg = self._hass.data.get(DOMAIN, {}).get(f"_ws_{coord.entry.entry_id}")
+            if reg is not None and reg.get(client_id) is ws:
+                reg.pop(client_id, None)
+            _LOGGER.info(
+                "car2home WS disconnected for entry %s (client %s)",
+                coord.entry.entry_id, client_id,
+            )
 
         return ws
 
@@ -281,9 +313,18 @@ class Car2HomeWsView(HomeAssistantView):
             event_name = frame.get("event")
             if event_name:
                 data = dict(frame.get("data") or {})
-                # Attach device identity so automations can filter by vehicle.
-                data.setdefault("vin", coord.entry.data.get(CONF_VIN))
-                data.setdefault("device_slug", coord.entry.data.get(CONF_DEVICE_SLUG))
+                # Attach the vehicle identity so automations can filter by car.
+                # Resolve the event's target (car_id) against the target
+                # catalogue; fall back to legacy single-device entry fields.
+                target = str(frame.get("target") or data.get("car_id") or "")
+                target_ctx = (coord.entry.data.get(CONF_TARGETS) or {}).get(target) or {}
+                data.setdefault(
+                    "vin", target_ctx.get("vin") or coord.entry.data.get(CONF_VIN)
+                )
+                data.setdefault(
+                    "device_slug",
+                    target_ctx.get("device_slug") or coord.entry.data.get(CONF_DEVICE_SLUG),
+                )
                 data.setdefault("timestamp_ms", frame.get("ts"))
                 self._hass.bus.async_fire(f"{DOMAIN}_{event_name}", data)
         elif ftype == FRAME_ACK:

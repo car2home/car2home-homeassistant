@@ -4,6 +4,12 @@ Key design choice (user requirement): data entities NEVER report unavailable.
 Transport state is surfaced via a separate diagnostic binary_sensor
 (`binary_sensor.*_ws_connected`), so lovelace cards that rely on historical
 state keep rendering even after app/network outages.
+
+Multi-car: every entity belongs to a TARGET (the garage hub, or one car). The
+device identifier and unique_id are anchored on the immutable target id (the
+car GUID, or the garage id) — never on the slug — so two cars of the same model
+never collide and renaming a car never re-keys its entities. The slug only
+feeds the human-readable device name / entity_id.
 """
 from __future__ import annotations
 
@@ -14,68 +20,63 @@ from typing import Any
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import (
-    CONF_DEVICE_SLUG,
-    CONF_HW_VERSION,
-    CONF_MANUFACTURER,
-    CONF_MODEL,
-    CONF_NICKNAME,
-    CONF_VIN,
-    DOMAIN,
-    MANUFACTURER_DEFAULT,
-)
+from .const import DOMAIN, MANUFACTURER_DEFAULT
 
 _MANIFEST_VERSION = json.loads(
     (Path(__file__).parent / "manifest.json").read_text(encoding="utf-8")
 ).get("version")
 from .coordinator import Car2HomeCoordinator
-from .slug import build_base_slug
 
 
 class Car2HomeEntity(CoordinatorEntity[Car2HomeCoordinator]):
-    """Shared entity base with DeviceInfo derived from the config entry.
+    """Shared entity base with DeviceInfo derived from a target context.
 
-    unique_id convention (mirrors the app's MQTT naming):
-        {device_slug}_{sensor_id}
-    where device_slug = car2home_{manufacturer}_{model}[_{N}], producing
-    Entity IDs like `sensor.car2home_toyota_corolla_cross_rpm`.
+    unique_id convention: ``{target_id}_{sensor_id}`` where target_id is the
+    immutable car GUID (or the garage id). Globally unique and stable.
     """
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: Car2HomeCoordinator, sensor_id: str) -> None:
+    def __init__(
+        self,
+        coordinator: Car2HomeCoordinator,
+        target_ctx: dict[str, Any],
+        sensor_id: str,
+    ) -> None:
         super().__init__(coordinator)
         self._sensor_id = sensor_id
+        self._target_id = str(target_ctx.get("id"))
 
-        data = coordinator.entry.data
-        nickname = data.get(CONF_NICKNAME)
-        device_slug = data.get(CONF_DEVICE_SLUG) or build_base_slug(
-            data.get(CONF_MANUFACTURER), data.get(CONF_MODEL), nickname
-        )
-        vin = data.get(CONF_VIN)
+        vin = (target_ctx.get("vin") or "").strip()
+        model = target_ctx.get("model") or "Vehicle"
+        nickname = target_ctx.get("nickname")
 
-        self._attr_unique_id = f"{device_slug}_{sensor_id}"
+        self._attr_unique_id = f"{self._target_id}_{sensor_id}"
 
-        # Slug is the primary, human-readable identifier. VIN (when present)
-        # is kept as a secondary identifier so Device Registry deduplicates
-        # across re-pair scenarios where the app connects with a different slug.
-        identifiers = {(DOMAIN, device_slug)}
+        # Device identity is the immutable target id. VIN (when present) is a
+        # secondary identifier so the registry dedups across a re-pair that
+        # reports the same car.
+        identifiers = {(DOMAIN, self._target_id)}
         if vin:
             identifiers.add((DOMAIN, f"vin:{vin}"))
 
-        model = data.get(CONF_MODEL) or "Vehicle"
         # Fold the nickname into the device name so two cars of the same model
-        # (e.g. two Corolla Cross) show as "Corolla Cross · Meu" / "· Esposa"
-        # instead of two identical "Corolla Cross" devices.
-        name = f"{model} · {nickname}" if nickname else model
+        # show as "Corolla Cross · Meu" / "· Esposa" instead of two identical
+        # "Corolla Cross" devices.
+        name = target_ctx.get("name") or (f"{model} · {nickname}" if nickname else model)
         self._attr_device_info = DeviceInfo(
             identifiers=identifiers,
-            manufacturer=data.get(CONF_MANUFACTURER) or MANUFACTURER_DEFAULT,
+            manufacturer=target_ctx.get("manufacturer") or MANUFACTURER_DEFAULT,
             model=model,
             name=name,
             sw_version=_MANIFEST_VERSION,
-            hw_version=data.get(CONF_HW_VERSION),
         )
+
+    def _values(self) -> dict[str, Any]:
+        """This target's value namespace. Defensive .get chain — never index
+        ``values[target][id]`` (a KeyError on the first frame propagates up
+        through the aiohttp WS handler and tears the socket down)."""
+        return self.coordinator.data.get("values", {}).get(self._target_id, {}) or {}
 
     @property
     def available(self) -> bool:
@@ -83,7 +84,10 @@ class Car2HomeEntity(CoordinatorEntity[Car2HomeCoordinator]):
         return True
 
 
-def describe_from_frame(frame: dict[str, Any], platform: str) -> list[dict[str, Any]]:
-    """Filter sensor descriptors from a hello frame by target platform."""
-    sensors = (frame or {}).get("sensors") or []
-    return [s for s in sensors if (s.get("platform") or "sensor") == platform]
+def iter_target_descriptors(data: dict[str, Any], platform: str):
+    """Yield ``(target_ctx, descriptor)`` for every sensor of the given platform
+    across all targets (garage hub + cars)."""
+    for ctx in (data or {}).get("targets", {}).values():
+        for s in ctx.get("sensors") or []:
+            if (s.get("platform") or "sensor") == platform:
+                yield ctx, s

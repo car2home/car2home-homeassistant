@@ -44,47 +44,52 @@ class Car2HomeSyncModeSwitch(Car2HomeEntity, SwitchEntity):
     _attr_name = "Online sync mode"
 
     def __init__(self, coordinator: Car2HomeCoordinator) -> None:
-        super().__init__(coordinator, "sync_mode_online")
+        # Sync mode is a phone/garage concern, not per-car → garage-hub device.
+        super().__init__(coordinator, coordinator.garage_ctx(), "sync_mode_online")
 
     @property
     def is_on(self) -> bool:
-        # App echoes sync_mode as a state value ("online" / "home").
-        # Default to True (Online) so HA renders a sane initial state while
-        # the first hello frame hasn't arrived yet.
-        v = self.coordinator.data.get("values", {}).get("sync_mode")
+        # App echoes sync_mode as a state value ("online" / "home") in the
+        # garage-hub namespace. Default to True (Online) so HA renders a sane
+        # initial state while the first hello frame hasn't arrived yet.
+        v = self._values().get("sync_mode")
         if isinstance(v, str):
             return v.lower() != "home"
         return True
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._send_cmd("set_sync_mode_online")
-        # Optimistic local update; the app's state echo will confirm.
-        self.coordinator.data.setdefault("values", {})["sync_mode"] = "online"
-        self.async_write_ha_state()
+        self._optimistic("online")
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._send_cmd("set_sync_mode_home")
-        self.coordinator.data.setdefault("values", {})["sync_mode"] = "home"
+        self._optimistic("home")
+
+    def _optimistic(self, mode: str) -> None:
+        # Optimistic local update in THIS target's namespace; the app's state
+        # echo will confirm. A flat write would land where nothing reads it.
+        self.coordinator.data.setdefault("values", {}).setdefault(
+            self._target_id, {}
+        )["sync_mode"] = mode
         self.async_write_ha_state()
 
     async def _send_cmd(self, cmd: str) -> None:
-        """Push a server→client command over the open WebSocket.
+        """Push a server→client command to every phone paired to this garage.
 
-        The app's HaService subscribes to CommandReceived and routes it to
-        HaSyncService.OnHaCommandReceived, which updates SyncMode and echoes.
+        The registry holds one socket per paired phone (keyed by client_id), so
+        a garage shared by two phones gets the toggle on both. The app's
+        HaService routes it to HaSyncService.OnHaCommandReceived.
         """
         domain_data = self.hass.data.get(DOMAIN, {})
-        ws = domain_data.get(f"_ws_{self.coordinator.entry.entry_id}")
-        if ws is None or ws.closed:
-            return
-        try:
-            await ws.send_str(json.dumps({
-                "type": "command",
-                "v": 1,
-                "cmd": cmd,
-            }))
-        except Exception:  # pragma: no cover - defensive, ws may race-close
-            pass
+        sockets = domain_data.get(f"_ws_{self.coordinator.entry.entry_id}") or {}
+        payload = json.dumps({"type": "command", "v": 2, "cmd": cmd})
+        for ws in list(sockets.values()):
+            if ws is None or ws.closed:
+                continue
+            try:
+                await ws.send_str(payload)
+            except Exception:  # pragma: no cover - defensive, ws may race-close
+                pass
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()

@@ -20,7 +20,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, SIGNAL_NEW_DESCRIPTOR
 from .coordinator import Car2HomeCoordinator
-from .entity import Car2HomeEntity, describe_from_frame
+from .entity import Car2HomeEntity, iter_target_descriptors
 
 
 async def async_setup_entry(
@@ -29,24 +29,23 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: Car2HomeCoordinator = hass.data[DOMAIN][entry.entry_id]
-    known: set[str] = set()
+    known: set[tuple[str, str]] = set()
 
+    # WS-transport diagnostic lives on the stable garage-hub device.
     async_add_entities([WsConnectedSensor(coordinator)])
 
     @callback
     def _add_from_descriptor(entry_id: str | None = None) -> None:
         if entry_id is not None and entry_id != coordinator.entry.entry_id:
             return
-        descriptor = coordinator.data.get("descriptor")
-        if not descriptor:
-            return
         new_entities: list[Car2HomeBinarySensor] = []
-        for desc in describe_from_frame(descriptor, "binary_sensor"):
+        for target_ctx, desc in iter_target_descriptors(coordinator.data, "binary_sensor"):
             sensor_id = desc.get("id")
-            if not sensor_id or sensor_id in known:
+            key = (str(target_ctx.get("id")), sensor_id)
+            if not sensor_id or key in known:
                 continue
-            known.add(sensor_id)
-            new_entities.append(Car2HomeBinarySensor(coordinator, desc))
+            known.add(key)
+            new_entities.append(Car2HomeBinarySensor(coordinator, target_ctx, desc))
         if new_entities:
             async_add_entities(new_entities)
 
@@ -58,9 +57,9 @@ async def async_setup_entry(
 
 class Car2HomeBinarySensor(Car2HomeEntity, BinarySensorEntity):
     def __init__(
-        self, coordinator: Car2HomeCoordinator, desc: dict[str, Any]
+        self, coordinator: Car2HomeCoordinator, target_ctx: dict[str, Any], desc: dict[str, Any]
     ) -> None:
-        super().__init__(coordinator, desc["id"])
+        super().__init__(coordinator, target_ctx, desc["id"])
         self._desc = desc
         self._attr_name = desc.get("name")
         self._attr_translation_key = desc.get("translation_key")
@@ -77,7 +76,7 @@ class Car2HomeBinarySensor(Car2HomeEntity, BinarySensorEntity):
 
     @property
     def is_on(self) -> bool | None:
-        value = self.coordinator.data.get("values", {}).get(self._sensor_id)
+        value = self._values().get(self._sensor_id)
         if value is None:
             return None
         if isinstance(value, bool):
@@ -98,7 +97,7 @@ class WsConnectedSensor(Car2HomeEntity, BinarySensorEntity):
     _attr_name = "Connection"
 
     def __init__(self, coordinator: Car2HomeCoordinator) -> None:
-        super().__init__(coordinator, "ws_connected")
+        super().__init__(coordinator, coordinator.garage_ctx(), "ws_connected")
 
     @property
     def is_on(self) -> bool:
