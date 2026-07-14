@@ -14,6 +14,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, SIGNAL_NEW_DESCRIPTOR
 from .coordinator import Car2HomeCoordinator
@@ -144,6 +145,13 @@ class Car2HomeSensor(Car2HomeEntity, RestoreSensor, SensorEntity):
         # ValueError. Surface as None = unknown instead.
         if isinstance(value, str) and not value:
             return None
+
+        # A `timestamp` device_class sensor MUST return a tz-aware datetime
+        # object — HA rejects a raw ISO string and shows "unknown" (this is why
+        # "Last refuel — Date" was blank). Parse the app's ISO-8601 string
+        # (e.g. "2026-06-16T21:00:00.0000000Z") into a datetime.
+        if self._attr_device_class == SensorDeviceClass.TIMESTAMP and isinstance(value, str):
+            return dt_util.parse_datetime(value)
 
         # Defense in depth: a sensor with numeric context (state_class set,
         # numeric device_class, or a unit) MUST publish numeric values — HA
