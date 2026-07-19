@@ -8,6 +8,10 @@
       "pair": {
         "title": "Parear com Car 2 Home",
         "description": "## Código de pareamento\n\n# {code}\n\nDigite este código no aplicativo para finalizar o pareamento.\n\n1. Abra o app **Car 2 Home** no seu celular.\n2. Vá em **Configurações → Home Assistant**.\n3. Selecione a aba **Integração**.\n4. Informe a URL deste Home Assistant (ex.: `{ha_url}`).\n5. Toque em **Parear**, informe o código acima e confirme.\n6. Volte aqui e clique em **Enviar** para concluir.\n\nO código expira às **{expires_at}** (em {ttl_minutes} minutos)."
+      },
+      "pair_link": {
+        "title": "Adicionar outro celular",
+        "description": "Use isto para adicionar **outro celular** à sua garagem existente. Se esse celular estiver na mesma conta, ele entra na mesma garagem e alimenta os mesmos veículos. O celular já conectado continua funcionando.\n\n## Código de pareamento\n\n# {code}\n\nDigite este código no aplicativo para finalizar o pareamento.\n\n1. Abra o app **Car 2 Home** no celular que você está adicionando.\n2. Vá em **Configurações → Home Assistant**.\n3. Selecione a aba **Integração**.\n4. Informe a URL deste Home Assistant (ex.: `{ha_url}`).\n5. Toque em **Parear**, informe o código acima e confirme.\n6. Volte aqui e clique em **Enviar** para concluir.\n\nO código expira às **{expires_at}** (em {ttl_minutes} minutos)."
       }
     },
     "error": {
@@ -17,7 +21,7 @@
     },
     "abort": {
       "already_configured": "Este veículo já está configurado.",
-      "device_linked": "Este dispositivo foi vinculado ao veículo já configurado.",
+      "device_linked": "Este celular foi vinculado à sua garagem existente. Os dois celulares agora alimentam os mesmos veículos.",
       "invalid_or_expired_code": "O código de pareamento não foi aceito pelo app. Inicie um novo pareamento.",
       "timeout": "Tempo de pareamento esgotado — o código expirou antes do app confirmar.",
       "unknown": "Erro inesperado durante o pareamento."

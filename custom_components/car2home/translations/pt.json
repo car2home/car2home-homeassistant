@@ -8,6 +8,10 @@
       "pair": {
         "title": "Emparelhar com Car 2 Home",
         "description": "## Código de emparelhamento\n\n# {code}\n\nIntroduz este código na aplicação móvel para concluir o emparelhamento.\n\n1. Abre a app **Car 2 Home** no teu telemóvel.\n2. Vai a **Definições → Home Assistant**.\n3. Seleciona o separador **Integração**.\n4. Introduz o URL deste Home Assistant (por exemplo `{ha_url}`).\n5. Toca em **Emparelhar**, introduz o código acima e confirma.\n6. Regressa aqui e toca em **Submeter** para concluir.\n\nO código expira às **{expires_at}** (em {ttl_minutes} minutos)."
+      },
+      "pair_link": {
+        "title": "Adicionar outro telemóvel",
+        "description": "Use isto para adicionar **outro telemóvel** à sua garagem existente. Se esse telemóvel tiver sessão iniciada na mesma conta, entra na mesma garagem e alimenta os mesmos veículos. O telemóvel já ligado continua a funcionar.\n\n## Código de emparelhamento\n\n# {code}\n\nIntroduza este código na aplicação para concluir o emparelhamento.\n\n1. Abra a app **Car 2 Home** no telemóvel que está a adicionar.\n2. Vá a **Definições → Home Assistant**.\n3. Selecione o separador **Integração**.\n4. Introduza o URL desta instância do Home Assistant (ex.: `{ha_url}`).\n5. Toque em **Emparelhar**, introduza o código acima e confirme.\n6. Volte aqui e clique em **Enviar** para concluir.\n\nO código expira às **{expires_at}** (em {ttl_minutes} minutos)."
       }
     },
     "error": {
@@ -17,7 +21,7 @@
     },
     "abort": {
       "already_configured": "Este veículo já está configurado.",
-      "device_linked": "Este dispositivo foi vinculado ao veículo já configurado.",
+      "device_linked": "Este telemóvel foi associado à sua garagem existente. Os dois telemóveis alimentam agora os mesmos veículos.",
       "invalid_or_expired_code": "O código não foi aceite pela app. Inicia um novo emparelhamento.",
       "timeout": "Tempo esgotado — o código expirou antes da app confirmar.",
       "unknown": "Erro inesperado durante o emparelhamento."

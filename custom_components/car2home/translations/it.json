@@ -8,6 +8,10 @@
       "pair": {
         "title": "Associa Car 2 Home",
         "description": "## Codice di associazione\n\n# {code}\n\nInserisci questo codice nell'app per completare l'associazione.\n\n1. Apri l'app **Car 2 Home** sul telefono.\n2. Vai in **Impostazioni → Home Assistant**.\n3. Seleziona la scheda **Integrazione**.\n4. Inserisci l'URL di questo Home Assistant (es. `{ha_url}`).\n5. Tocca **Associa**, inserisci il codice qui sopra e conferma.\n6. Torna qui e tocca **Invia** per completare.\n\nIl codice scade alle **{expires_at}** (tra {ttl_minutes} minuti)."
+      },
+      "pair_link": {
+        "title": "Aggiungi un altro telefono",
+        "description": "Usa questa opzione per aggiungere **un altro telefono** al tuo garage esistente. Se quel telefono ha effettuato l'accesso con lo stesso account, entra nello stesso garage e alimenta gli stessi veicoli. Il telefono già collegato continua a funzionare.\n\n## Codice di associazione\n\n# {code}\n\nInserisci questo codice nell'app per completare l'associazione.\n\n1. Apri l'app **Car 2 Home** sul telefono che stai aggiungendo.\n2. Vai su **Impostazioni → Home Assistant**.\n3. Seleziona la scheda **Integrazione**.\n4. Inserisci l'URL di questa istanza di Home Assistant (es. `{ha_url}`).\n5. Tocca **Associa**, digita il codice qui sopra e conferma.\n6. Torna qui e fai clic su **Invia** per completare.\n\nIl codice scade alle **{expires_at}** (tra {ttl_minutes} minuti)."
       }
     },
     "error": {
@@ -17,7 +21,7 @@
     },
     "abort": {
       "already_configured": "Questo veicolo è già configurato.",
-      "device_linked": "Questo dispositivo è stato collegato al veicolo già configurato.",
+      "device_linked": "Questo telefono è stato collegato al tuo garage esistente. Entrambi i telefoni ora alimentano gli stessi veicoli.",
       "invalid_or_expired_code": "Il codice non è stato accettato dall'app. Avvia una nuova associazione.",
       "timeout": "Tempo scaduto — il codice è scaduto prima che l'app confermasse.",
       "unknown": "Errore imprevisto durante l'associazione."

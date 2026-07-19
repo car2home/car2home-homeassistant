@@ -8,6 +8,10 @@
       "pair": {
         "title": "Pair with Car 2 Home",
         "description": "## Pairing code\n\n# {code}\n\nEnter this code in the mobile app to finish pairing.\n\n1. Open the **Car 2 Home** app on your phone.\n2. Go to **Settings → Home Assistant**.\n3. Select the **Integration** tab.\n4. Enter the URL of this Home Assistant instance (e.g. `{ha_url}`).\n5. Tap **Pair**, type the code above, and confirm.\n6. Come back here and click **Submit** to finish.\n\nThe code expires at **{expires_at}** (in {ttl_minutes} minutes)."
+      },
+      "pair_link": {
+        "title": "Add another phone",
+        "description": "Use this to add **another phone** to your existing garage. If that phone is signed in to the same account, it joins the same garage and feeds the same vehicles. The phone already connected keeps working.\n\n## Pairing code\n\n# {code}\n\nEnter this code in the mobile app to finish pairing.\n\n1. Open the **Car 2 Home** app on the phone you are adding.\n2. Go to **Settings → Home Assistant**.\n3. Select the **Integration** tab.\n4. Enter the URL of this Home Assistant instance (e.g. `{ha_url}`).\n5. Tap **Pair**, type the code above, and confirm.\n6. Come back here and click **Submit** to finish.\n\nThe code expires at **{expires_at}** (in {ttl_minutes} minutes)."
       }
     },
     "error": {
@@ -17,7 +21,7 @@
     },
     "abort": {
       "already_configured": "This vehicle is already configured.",
-      "device_linked": "This device was linked to the vehicle already configured.",
+      "device_linked": "This phone was linked to your existing garage. Both phones now feed the same vehicles.",
       "invalid_or_expired_code": "The pairing code was not accepted by the app. Start a new pairing.",
       "timeout": "Pairing timed out — the code expired before the app confirmed.",
       "unknown": "Unexpected error during pairing."

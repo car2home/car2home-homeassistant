@@ -8,6 +8,10 @@
       "pair": {
         "title": "Emparejar con Car 2 Home",
         "description": "## Código de emparejamiento\n\n# {code}\n\nIntroduce este código en la aplicación para completar el emparejamiento.\n\n1. Abre la app **Car 2 Home** en tu teléfono.\n2. Ve a **Ajustes → Home Assistant**.\n3. Selecciona la pestaña **Integración**.\n4. Introduce la URL de este Home Assistant (p. ej. `{ha_url}`).\n5. Toca **Emparejar**, introduce el código anterior y confirma.\n6. Vuelve aquí y pulsa **Enviar** para finalizar.\n\nEl código expira a las **{expires_at}** (en {ttl_minutes} minutos)."
+      },
+      "pair_link": {
+        "title": "Añadir otro teléfono",
+        "description": "Usa esto para añadir **otro teléfono** a tu garaje existente. Si ese teléfono tiene la sesión iniciada en la misma cuenta, se une al mismo garaje y alimenta los mismos vehículos. El teléfono ya conectado sigue funcionando.\n\n## Código de emparejamiento\n\n# {code}\n\nIntroduce este código en la aplicación para finalizar el emparejamiento.\n\n1. Abre la app **Car 2 Home** en el teléfono que vas a añadir.\n2. Ve a **Ajustes → Home Assistant**.\n3. Selecciona la pestaña **Integración**.\n4. Introduce la URL de esta instancia de Home Assistant (p. ej. `{ha_url}`).\n5. Toca **Emparejar**, escribe el código de arriba y confirma.\n6. Vuelve aquí y haz clic en **Enviar** para terminar.\n\nEl código caduca a las **{expires_at}** (en {ttl_minutes} minutos)."
       }
     },
     "error": {
@@ -17,7 +21,7 @@
     },
     "abort": {
       "already_configured": "Este vehículo ya está configurado.",
-      "device_linked": "Este dispositivo se vinculó al vehículo ya configurado.",
+      "device_linked": "Este teléfono se vinculó a tu garaje existente. Ambos teléfonos alimentan ahora los mismos vehículos.",
       "invalid_or_expired_code": "La app no aceptó el código. Inicia un nuevo emparejamiento.",
       "timeout": "Tiempo agotado — el código expiró antes de que la app confirmara.",
       "unknown": "Error inesperado durante el emparejamiento."

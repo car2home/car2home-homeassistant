@@ -8,6 +8,10 @@
       "pair": {
         "title": "Mit Car 2 Home koppeln",
         "description": "## Kopplungscode\n\n# {code}\n\nGib diesen Code in der App ein, um die Kopplung abzuschließen.\n\n1. Öffne die App **Car 2 Home** auf deinem Telefon.\n2. Gehe zu **Einstellungen → Home Assistant**.\n3. Wähle den Tab **Integration**.\n4. Gib die URL dieses Home Assistant ein (z. B. `{ha_url}`).\n5. Tippe auf **Koppeln**, gib den Code oben ein und bestätige.\n6. Komm hierher zurück und klicke auf **Senden**, um abzuschließen.\n\nDer Code läuft um **{expires_at}** ab (in {ttl_minutes} Minuten)."
+      },
+      "pair_link": {
+        "title": "Weiteres Telefon hinzufügen",
+        "description": "Damit fügst du **ein weiteres Telefon** zu deiner bestehenden Garage hinzu. Wenn dieses Telefon mit demselben Konto angemeldet ist, kommt es in dieselbe Garage und liefert Daten für dieselben Fahrzeuge. Das bereits verbundene Telefon läuft weiter.\n\n## Kopplungscode\n\n# {code}\n\nGib diesen Code in der App ein, um die Kopplung abzuschließen.\n\n1. Öffne die **Car 2 Home** App auf dem Telefon, das du hinzufügst.\n2. Gehe zu **Einstellungen → Home Assistant**.\n3. Wähle den Tab **Integration**.\n4. Gib die URL dieser Home Assistant Instanz ein (z. B. `{ha_url}`).\n5. Tippe auf **Koppeln**, gib den Code oben ein und bestätige.\n6. Komm hierher zurück und klicke auf **Senden**, um abzuschließen.\n\nDer Code läuft um **{expires_at}** ab (in {ttl_minutes} Minuten)."
       }
     },
     "error": {
@@ -17,7 +21,7 @@
     },
     "abort": {
       "already_configured": "Dieses Fahrzeug ist bereits konfiguriert.",
-      "device_linked": "Dieses Gerät wurde mit dem bereits konfigurierten Fahrzeug verknüpft.",
+      "device_linked": "Dieses Telefon wurde mit deiner bestehenden Garage verknüpft. Beide Telefone liefern jetzt Daten für dieselben Fahrzeuge.",
       "invalid_or_expired_code": "Der Code wurde von der App nicht akzeptiert. Kopplung neu starten.",
       "timeout": "Zeitüberschreitung — der Code ist abgelaufen, bevor die App bestätigt hat.",
       "unknown": "Unerwarteter Fehler bei der Kopplung."

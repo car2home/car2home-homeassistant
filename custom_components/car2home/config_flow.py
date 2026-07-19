@@ -175,8 +175,15 @@ class Car2HomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         except NoURLAvailableError:
             ha_url = "https://homeassistant.local:8123"
 
+        # Branch the copy: with a garage already configured, "Add hub" is almost
+        # always "add another phone", so say so. The garage id isn't known yet at
+        # this point (it arrives with the app's pair payload and is resolved in
+        # async_step_finish), so the test is "any entry exists" and the wording
+        # stays conditional: same account → same garage.
+        step_id = "pair_link" if self._async_current_entries() else "pair"
+
         return self.async_show_form(
-            step_id="pair",
+            step_id=step_id,
             data_schema=vol.Schema({}),
             description_placeholders={
                 "code": " ".join(list(self._code)),
@@ -185,6 +192,12 @@ class Car2HomeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "ha_url": ha_url,
             },
         )
+
+    async def async_step_pair_link(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Submit handler for the `pair_link` form (same step, different copy)."""
+        return await self.async_step_pair(user_input)
 
     async def _wait_for_pair(
         self, pairing: PairingManager, code: str
