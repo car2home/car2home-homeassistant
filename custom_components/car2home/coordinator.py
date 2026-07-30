@@ -157,6 +157,9 @@ class Car2HomeCoordinator(DataUpdateCoordinator):
             "is_primary": block.get("is_primary", existing.get("is_primary")),
             "name": block.get("name") or existing.get("name"),
             "sensors": block.get("sensors") or [],
+            # Sensors the app is explicitly NOT exporting. Kept per target so each platform can delete
+            # the matching entities instead of leaving them frozen at their last value.
+            "retired_sensors": block.get("retired_sensors") or [],
         }
         self.data["targets"][target_id] = ctx
         # Compare only the persisted (non-sensor) meta to decide on a rewrite.

@@ -17,6 +17,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -92,3 +94,42 @@ def iter_target_descriptors(data: dict[str, Any], platform: str):
         for s in ctx.get("sensors") or []:
             if (s.get("platform") or "sensor") == platform:
                 yield ctx, s
+
+
+def iter_target_retired(data: dict[str, Any]):
+    """Yield ``(target_ctx, sensor_id)`` for every sensor a target explicitly retired.
+
+    The app sends this list rather than letting the integration infer removals from absence, and the
+    difference matters: a car only declares its OBD sensors while it is the primary car AND its ECU is
+    online, so a parked car legitimately sends an empty sensor list. Deleting whatever went missing
+    would wipe every entity each time the engine is switched off.
+    """
+    for ctx in (data or {}).get("targets", {}).values():
+        for sensor_id in ctx.get("retired_sensors") or []:
+            if sensor_id:
+                yield ctx, str(sensor_id)
+
+
+@callback
+def reap_retired_entities(
+    hass: HomeAssistant,
+    data: dict[str, Any],
+    platform: str,
+    known: set[tuple[str, str]],
+) -> None:
+    """Delete the entities of this platform whose sensors the app stopped exporting.
+
+    Without this an entity the user turns off in Supported Sensors stays in Home Assistant forever,
+    stuck at its last value — worse than the traffic that turning it off was meant to save. Removing it
+    from ``known`` too is what lets the same sensor be re-created if the user turns export back on.
+
+    Deleting an id this platform never owned is a no-op: ``async_get_entity_id`` simply returns None.
+    """
+    registry = er.async_get(hass)
+    for target_ctx, sensor_id in iter_target_retired(data):
+        target_id = str(target_ctx.get("id"))
+        key = (target_id, sensor_id)
+        entity_id = registry.async_get_entity_id(platform, DOMAIN, f"{target_id}_{sensor_id}")
+        if entity_id:
+            registry.async_remove(entity_id)
+        known.discard(key)

@@ -18,7 +18,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, SIGNAL_NEW_DESCRIPTOR
 from .coordinator import Car2HomeCoordinator
-from .entity import Car2HomeEntity, iter_target_descriptors
+from .entity import Car2HomeEntity, iter_target_descriptors, reap_retired_entities
 
 
 async def async_setup_entry(
@@ -47,6 +47,9 @@ async def async_setup_entry(
             new_entities.append(Car2HomeSensor(coordinator, target_ctx, desc))
         if new_entities:
             async_add_entities(new_entities)
+        # Same pass removes what the app stopped exporting — an entity left behind would sit at its
+        # last value forever, which is worse than never having created it.
+        reap_retired_entities(hass, coordinator.data, "sensor", known)
 
     entry.async_on_unload(
         async_dispatcher_connect(hass, SIGNAL_NEW_DESCRIPTOR, _add_from_descriptor)
