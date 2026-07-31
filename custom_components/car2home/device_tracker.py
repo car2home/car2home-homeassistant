@@ -6,6 +6,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN, SIGNAL_LOCATION, SIGNAL_NEW_DESCRIPTOR
 from .coordinator import Car2HomeCoordinator
@@ -44,7 +45,7 @@ async def async_setup_entry(
     _add_from_descriptor()
 
 
-class Car2HomeTracker(Car2HomeEntity, TrackerEntity):
+class Car2HomeTracker(Car2HomeEntity, RestoreEntity, TrackerEntity):
     _attr_source_type = SourceType.GPS
 
     def __init__(
@@ -57,6 +58,31 @@ class Car2HomeTracker(Car2HomeEntity, TrackerEntity):
         super().__init__(coordinator, target_ctx, sensor_id)
         self._attr_name = desc.get("name") or "Phone"
         self._attr_translation_key = desc.get("translation_key") or sensor_id
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        # Restart repaint: seed the last known fix so the tracker shows its prior
+        # position instead of "unavailable" until the app sends a fresh location
+        # frame. HA stores the coordinates as state attributes; the guard below
+        # keeps a live fix that already arrived this boot from being overwritten.
+        last = await self.async_get_last_state()
+        if last is None:
+            return
+        attrs = last.attributes or {}
+        lat, lng = attrs.get("latitude"), attrs.get("longitude")
+        if lat is None or lng is None:
+            return
+        loc = self.coordinator.data.setdefault("location", {})
+        # All-or-nothing: if a live frame already populated this target this boot,
+        # leave it — never splice a stale accuracy/battery onto live coordinates.
+        if self._target_id in loc:
+            return
+        fix = {"latitude": lat, "longitude": lng}
+        if attrs.get("gps_accuracy") is not None:
+            fix["gps_accuracy"] = attrs.get("gps_accuracy")
+        if attrs.get("battery_level") is not None:
+            fix["battery_level"] = attrs.get("battery_level")
+        loc[self._target_id] = fix
 
     def _loc(self) -> dict:
         # Phone GPS is stored under this target's namespace (the garage hub).

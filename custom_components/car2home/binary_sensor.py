@@ -17,6 +17,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN, SIGNAL_NEW_DESCRIPTOR
 from .coordinator import Car2HomeCoordinator
@@ -58,7 +59,7 @@ async def async_setup_entry(
     _add_from_descriptor()
 
 
-class Car2HomeBinarySensor(Car2HomeEntity, BinarySensorEntity):
+class Car2HomeBinarySensor(Car2HomeEntity, RestoreEntity, BinarySensorEntity):
     def __init__(
         self, coordinator: Car2HomeCoordinator, target_ctx: dict[str, Any], desc: dict[str, Any]
     ) -> None:
@@ -76,6 +77,19 @@ class Car2HomeBinarySensor(Car2HomeEntity, BinarySensorEntity):
                 pass
         if desc.get("entity_category") == "diagnostic":
             self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        # After a restart the entity is re-created from the persisted catalogue
+        # before the app reconnects; seed its last on/off state so it repaints
+        # instead of reading None. setdefault → a value already delivered on this
+        # boot wins. is_on parses the "on"/"off" string back to a bool.
+        last = await self.async_get_last_state()
+        if last is None or last.state not in ("on", "off"):
+            return
+        self.coordinator.data.setdefault("values", {}).setdefault(
+            self._target_id, {}
+        ).setdefault(self._sensor_id, last.state)
 
     @property
     def is_on(self) -> bool | None:

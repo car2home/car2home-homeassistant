@@ -72,9 +72,13 @@ class Car2HomeCoordinator(DataUpdateCoordinator):
         }
 
     async def async_setup(self) -> None:
-        """Seed targets from the config entry so built-in entities (the garage
-        hub's ws_connected / sync-mode switch) can attach before the first
-        hello arrives."""
+        """Seed targets from the persisted config entry BEFORE the platforms
+        enumerate them (__init__ awaits this ahead of async_forward_entry_setups),
+        so both the built-in entities (ws_connected / sync-mode switch) AND every
+        data entity are re-created at boot from the catalogue — no live hello
+        required. The persisted catalogue carries the sensor lists (see
+        _persist_targets), so an HA restart no longer leaves the app's entities
+        `unavailable` until the phone reconnects."""
         for target_id, ctx in (self.entry.data.get(CONF_TARGETS) or {}).items():
             self.data["targets"][target_id] = {**ctx, "sensors": ctx.get("sensors") or []}
 
@@ -142,10 +146,29 @@ class Car2HomeCoordinator(DataUpdateCoordinator):
             self._persist_targets()
 
     def _upsert_target(self, kind: str, target_id: str, block: dict[str, Any]) -> bool:
-        """Store a target's meta + sensors. Returns True if the persisted meta
-        changed (so we only rewrite entry.data when something relevant moved)."""
+        """Store a target's meta + sensors. Returns True if the persisted catalogue
+        should be rewritten (meta or the declared-sensor set moved)."""
         target_id = str(target_id)
         existing = self.data["targets"].get(target_id) or {}
+
+        # MERGE sensor descriptors, do NOT replace. A car declares its OBD sensors
+        # only while it is the primary car AND its ECU is online, so a parked car
+        # legitimately sends a hub-only list (same invariant iter_target_retired
+        # documents). Absence is NOT a removal — removals arrive explicitly in
+        # retired_sensors. Replacing would drop OBD from the in-memory + persisted
+        # catalogue, so a restart-while-parked would rebuild without it. Accumulate
+        # by id (a fresh descriptor wins), then drop whatever the app retired.
+        retired = [str(r) for r in (block.get("retired_sensors") or []) if r]
+        merged: dict[str, Any] = {
+            s["id"]: s for s in (existing.get("sensors") or []) if s.get("id")
+        }
+        for s in block.get("sensors") or []:
+            if s.get("id"):
+                merged[s["id"]] = s
+        for rid in retired:
+            merged.pop(rid, None)
+        sensors = list(merged.values())
+
         ctx = {
             "kind": kind,
             "id": target_id,
@@ -156,20 +179,37 @@ class Car2HomeCoordinator(DataUpdateCoordinator):
             "vin": (block.get("vin") or existing.get("vin") or "").strip() or None,
             "is_primary": block.get("is_primary", existing.get("is_primary")),
             "name": block.get("name") or existing.get("name"),
-            "sensors": block.get("sensors") or [],
+            "sensors": sensors,
             # Sensors the app is explicitly NOT exporting. Kept per target so each platform can delete
             # the matching entities instead of leaving them frozen at their last value.
-            "retired_sensors": block.get("retired_sensors") or [],
+            "retired_sensors": retired,
         }
         self.data["targets"][target_id] = ctx
-        # Compare only the persisted (non-sensor) meta to decide on a rewrite.
+        # Rewrite entry.data when the meta OR the merged sensor set changed. Compare
+        # the sensor set order-insensitively so a reordered but identical re-announce
+        # (every reconnect re-sends the hello) doesn't churn a disk write. A retire
+        # already shows up here because it shrinks the merged set.
         meta_keys = ("kind", "device_slug", "model", "manufacturer", "nickname", "vin", "is_primary", "name")
-        return any(existing.get(k) != ctx.get(k) for k in meta_keys)
+        return (
+            any(existing.get(k) != ctx.get(k) for k in meta_keys)
+            or self._sensor_sig(existing.get("sensors")) != self._sensor_sig(sensors)
+        )
+
+    @staticmethod
+    def _sensor_sig(sensors: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+        """Order-insensitive signature of a descriptor list for change detection."""
+        return sorted(
+            (s for s in (sensors or []) if s.get("id")),
+            key=lambda s: str(s.get("id")),
+        )
 
     def _persist_targets(self) -> None:
-        """Persist the target catalogue (meta only, no sensor lists) so a HA
-        restart rebuilds devices and event enrichment works without a live WS.
-        Does NOT reload the entry (a reload would orphan the open socket).
+        """Persist the FULL target catalogue (meta AND sensor lists) so an HA
+        restart rebuilds both the devices and their data entities from entry.data,
+        without waiting for the app to reconnect and re-send a hello. async_setup
+        seeds the coordinator from this catalogue before the platforms enumerate
+        it, so the entities exist at boot; RestoreEntity then repaints their last
+        value. Does NOT reload the entry (a reload would orphan the open socket).
 
         Merges OVER the persisted catalogue instead of replacing it, so a car a
         second phone just linked via config_flow (written to entry.data but not
@@ -177,7 +217,7 @@ class Car2HomeCoordinator(DataUpdateCoordinator):
         phone's hello triggers a persist first."""
         catalogue = dict(self.entry.data.get(CONF_TARGETS) or {})
         for tid, ctx in self.data["targets"].items():
-            catalogue[tid] = {k: v for k, v in ctx.items() if k != "sensors"}
+            catalogue[tid] = dict(ctx)
         self.hass.config_entries.async_update_entry(
             self.entry, data={**self.entry.data, CONF_TARGETS: catalogue}
         )
