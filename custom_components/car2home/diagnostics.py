@@ -10,7 +10,19 @@ from homeassistant.core import HomeAssistant
 from .const import CONF_TOKEN, CONF_TOKENS, CONF_VIN, DOMAIN
 from .coordinator import Car2HomeCoordinator
 
-TO_REDACT = {CONF_TOKEN, CONF_TOKENS, CONF_VIN, "token", "tokens", "vin", "latitude", "longitude"}
+# "address" belongs here for the same reason as latitude/longitude: the parked device_tracker
+# carries the reverse-geocoded street where the car was left, which for most users is home.
+TO_REDACT = {
+    CONF_TOKEN,
+    CONF_TOKENS,
+    CONF_VIN,
+    "token",
+    "tokens",
+    "vin",
+    "latitude",
+    "longitude",
+    "address",
+}
 
 
 async def async_get_config_entry_diagnostics(

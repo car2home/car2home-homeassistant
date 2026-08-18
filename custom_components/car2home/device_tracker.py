@@ -1,6 +1,8 @@
 """Device tracker platform for Car 2 Home — GPS source."""
 from __future__ import annotations
 
+from typing import Any
+
 from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -82,6 +84,13 @@ class Car2HomeTracker(Car2HomeEntity, RestoreEntity, TrackerEntity):
             fix["gps_accuracy"] = attrs.get("gps_accuracy")
         if attrs.get("battery_level") is not None:
             fix["battery_level"] = attrs.get("battery_level")
+        # Restore the parking context alongside the coordinates. A parked car is the steady state
+        # — the app publishes its pin once on the parking transition and then goes quiet — so
+        # without this a Home Assistant restart would bring back the pin stripped of where and
+        # when the car was left, and it would stay that way until the next drive ends.
+        for key in ("source", "address", "parked_at"):
+            if attrs.get(key) is not None:
+                fix[key] = attrs.get(key)
         loc[self._target_id] = fix
 
     def _loc(self) -> dict:
@@ -111,3 +120,25 @@ class Car2HomeTracker(Car2HomeEntity, RestoreEntity, TrackerEntity):
             return int(bl) if bl is not None else None
         except (TypeError, ValueError):
             return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Parking context that rides along with the fix.
+
+        The app publishes the vehicle's location from exactly two sources: live GPS while a trip
+        is recording, and the car's parking record the rest of the time. ``source`` says which one
+        this fix came from, so an automation can distinguish "moving" from "parked" without
+        inferring it from timestamps; ``address`` and ``parked_at`` carry the parking context so
+        the tracker is a place the car was left, not just a pin.
+
+        Only present on parked fixes — a live fix carries ``source: "trip"`` alone. Keys are safe
+        to expose here: TrackerEntity.state_attributes is @final and emits only in_zones,
+        source_type, battery_level, latitude, longitude and gps_accuracy, none of which collide.
+        """
+        loc = self._loc()
+        attrs = {
+            key: loc[key]
+            for key in ("source", "address", "parked_at")
+            if loc.get(key) is not None
+        }
+        return attrs or None

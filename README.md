@@ -32,7 +32,7 @@ Unlike HTTP-polling integrations (Torque-style) or broker-based setups (MQTT), t
   - **Send events online** keeps the integration "alive" in HA with service status and semantic events.
   - **Send location online** trickles the vehicle position out once per minute so home/work automations still work.
 - 🔁 **Bidirectional Online / Wi-Fi only switch**: a `switch.*_sync_mode_online` entity lets you flip the app's mode straight from HA; the app echoes the new value back so the switch stays in sync.
-- 🗺️ **GPS device tracker**: phone location, accuracy, speed and bearing exposed as a native HA `device_tracker`.
+- 🗺️ **Vehicle device tracker**: the car's location as a native HA `device_tracker`, from two sources and nothing else. While a trip is recording it follows live GPS; the rest of the time it holds the car's parking spot, carrying `address` and `parked_at` as attributes, with `source` telling you which of the two you are looking at. It does not follow the phone around when you are not driving.
 - 📊 **Rich device classes**: speed, temperature, pressure, voltage, volume, volume flow rate, distance, duration, energy, power, battery and more, so HA renders the correct units, charts and statistics automatically.
 - 📈 **Long-term statistics ready**: distance, duration and energy sensors carry `state_class=total_increasing` out of the box.
 - 🚙 **Multi-vehicle native**: each car becomes its own `ConfigEntry` and HA Device, fully isolated.
@@ -137,7 +137,7 @@ The integration creates entities **dynamically** from the descriptor the app sen
 - **Comfort / environment**: ambient temperature, barometric pressure.
 - **Hybrid / EV**: HVESS voltage, current, charge/discharge energy, state of health, battery pack temperature.
 - **TPMS**: per-wheel pressure, temperature, sensor ID and low-pressure binary sensor.
-- **GPS**: latitude, longitude, altitude, accuracy, bearing, battery level, exposed as a native `device_tracker`.
+- **GPS**: the vehicle's position as a native `device_tracker` — live while a trip records, the parking spot otherwise. Latitude, longitude, altitude, accuracy and speed are also available as individual sensors (off by default); they follow the same rule, so none of them report the phone outside a trip.
 - **Diagnostics**: ELM327 version, OBD protocol, adapter voltage, ECU latency, WebSocket RTT, reconnect counters, current sync mode.
 
 All units are metric on the wire; Home Assistant converts the display to your configured unit system.
