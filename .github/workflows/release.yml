@@ -71,6 +71,43 @@ jobs:
           cd custom_components/car2home
           zip -r "${{ github.workspace }}/car2home.zip" ./
 
+      # HACS renders the RELEASE BODY as the changelog, both in its update dialog and in
+      # Settings > Updates. --generate-notes produced only "Full Changelog: <compare link>"
+      # here, because the commits land straight on main with no pull requests to list — so
+      # every user saw a link instead of a changelog. Build the body from the commit bullets
+      # instead: the messages already are one "- type: what changed" line per front of work.
+      - name: Build release notes from the commits
+        if: steps.check_release.outputs.exists == 'false'
+        run: |
+          PREV="$(git describe --tags --abbrev=0 --match 'v*' HEAD 2>/dev/null || true)"
+          if [ -n "$PREV" ]; then RANGE="${PREV}..HEAD"; else RANGE="HEAD"; fi
+          echo "Collecting bullets over $RANGE"
+
+          # Only commits that touched the integration, and only the user-facing bullet types:
+          # ci/chore/build/test/docs churn is noise in a changelog a driver reads.
+          git log --format=%B "$RANGE" -- custom_components/ \
+            | sed -E 's/\r$//' \
+            | grep -E '^[[:space:]]*-[[:space:]]*(feat|fix|perf|ref|refactor)(\([^)]*\))?:' \
+            | sed -E 's/^[[:space:]]*-[[:space:]]*//' \
+            | awk '!seen[$0]++' \
+            | sed -E 's/^/- /' > notes.md || true
+
+          # Never ship an empty body: fall back to the commit subjects, then to a plain line.
+          if [ ! -s notes.md ]; then
+            git log --format='- %s' "$RANGE" -- custom_components/ | awk '!seen[$0]++' > notes.md || true
+          fi
+          if [ ! -s notes.md ]; then
+            echo "- Maintenance release" > notes.md
+          fi
+
+          if [ -n "$PREV" ]; then
+            printf '\n**Full Changelog**: %s/compare/%s...v%s\n' \
+              "${{ github.server_url }}/${{ github.repository }}" "$PREV" "${{ steps.version.outputs.version }}" >> notes.md
+          fi
+
+          echo "--- release notes ---"
+          cat notes.md
+
       - name: Create release
         if: steps.check_release.outputs.exists == 'false'
         env:
@@ -78,5 +115,5 @@ jobs:
         run: |
           gh release create "v${{ steps.version.outputs.version }}" \
             --title "v${{ steps.version.outputs.version }}" \
-            --generate-notes \
+            --notes-file notes.md \
             "${{ github.workspace }}/car2home.zip"
