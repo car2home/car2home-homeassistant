@@ -10,7 +10,13 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DOMAIN, SIGNAL_LOCATION, SIGNAL_NEW_DESCRIPTOR
+from .const import (
+    DOMAIN,
+    LEGACY_TRACKER_ID,
+    PARKING_TRACKER_ID,
+    SIGNAL_LOCATION,
+    SIGNAL_NEW_DESCRIPTOR,
+)
 from .coordinator import Car2HomeCoordinator
 from .entity import Car2HomeEntity, iter_target_descriptors, reap_retired_entities
 
@@ -78,9 +84,14 @@ class Car2HomeTracker(Car2HomeEntity, RestoreEntity, TrackerEntity):
         if lat is None or lng is None:
             return
         loc = self.coordinator.data.setdefault("location", {})
-        # All-or-nothing: if a live frame already populated this target this boot,
-        # leave it — never splice a stale accuracy/battery onto live coordinates.
-        if self._target_id in loc:
+        per_target = loc.get(self._target_id)
+        if not isinstance(per_target, dict) or "latitude" in per_target:
+            per_target = {}
+            loc[self._target_id] = per_target
+        # All-or-nothing: if a live frame already populated THIS TRACKER this boot, leave it —
+        # never splice a stale accuracy/battery onto live coordinates. Scoped per tracker so
+        # restoring the parking pin cannot suppress the car tracker's own restore, or vice versa.
+        if self._sensor_id in per_target:
             return
         fix = {"latitude": lat, "longitude": lng}
         if attrs.get("gps_accuracy") is not None:
@@ -94,11 +105,25 @@ class Car2HomeTracker(Car2HomeEntity, RestoreEntity, TrackerEntity):
         for key in ("source", "address", "parked_at"):
             if attrs.get(key) is not None:
                 fix[key] = attrs.get(key)
-        loc[self._target_id] = fix
+        per_target[self._sensor_id] = fix
 
     def _loc(self) -> dict:
-        # Phone GPS is stored under this target's namespace (the garage hub).
-        return self.coordinator.data.get("location", {}).get(self._target_id) or {}
+        """This tracker's own fix, out of the target's per-tracker store.
+
+        A device can carry two trackers — the car's, which follows the live GPS while a trip
+        records, and the parking one, which stays where the car was left. They are told apart by
+        the ``tracker_id`` the app stamps on each location frame.
+        """
+        per_target = self.coordinator.data.get("location", {}).get(self._target_id) or {}
+        if not isinstance(per_target, dict):
+            return {}
+        frame = per_target.get(self._sensor_id)
+        if frame is None and self._sensor_id != PARKING_TRACKER_ID:
+            # An app older than the parking tracker sends one frame per target. Only the car
+            # tracker may claim it: handing it to the parking tracker would make the parking pin
+            # follow the car for the whole drive.
+            frame = per_target.get(LEGACY_TRACKER_ID)
+        return frame if isinstance(frame, dict) else {}
 
     @property
     def latitude(self) -> float | None:

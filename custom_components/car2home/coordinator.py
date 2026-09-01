@@ -12,7 +12,7 @@ namespaced by target id so two cars sharing a bare sensor id (e.g. two
       "targets":  { target_id: {kind, id, device_slug, model, manufacturer,
                                 nickname, vin, is_primary, name, sensors:[...]} },
       "values":   { target_id: { sensor_id: value } },
-      "location": { target_id: {frame} },
+      "location": { target_id: { tracker_id: {frame} } },
       "ws_connected": bool,
       "last_frame_ts": float,
     }
@@ -32,6 +32,7 @@ from .const import (
     CONF_GARAGE_ID,
     CONF_TARGETS,
     DOMAIN,
+    LEGACY_TRACKER_ID,
     MANUFACTURER_DEFAULT,
     SIGNAL_AVAILABILITY,
     SIGNAL_LOCATION,
@@ -252,12 +253,23 @@ class Car2HomeCoordinator(DataUpdateCoordinator):
 
     @callback
     def handle_location(self, frame: dict[str, Any]) -> None:
-        """Phone GPS is a garage-hub concern; store under the frame's target
-        (the garage id) so the device_tracker on the garage device reads it."""
+        """Store the fix under its target AND its tracker.
+
+        A device can carry more than one device_tracker — the car's own, which follows the live
+        GPS while a trip records, and the parking tracker, which must stay where the car was
+        left. Keyed by target alone the two overwrote each other, so the parking pin moved with
+        the car. ``tracker_id`` is the sensor id of the entity the frame feeds.
+        """
         target = str(frame.get("target") or self.garage_id() or "")
         if not target:
             return
-        self.data["location"][target] = frame
+        tracker = str(frame.get("tracker_id") or "").strip() or LEGACY_TRACKER_ID
+        slot = self.data["location"].get(target)
+        if not isinstance(slot, dict) or "latitude" in slot:
+            # Absent, or a flat frame left by a previous version of this integration.
+            slot = {}
+            self.data["location"][target] = slot
+        slot[tracker] = frame
         self.data["last_frame_ts"] = time.time()
         self.async_set_updated_data(self.data)
         async_dispatcher_send(self.hass, SIGNAL_LOCATION, self.entry.entry_id)

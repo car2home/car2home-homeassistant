@@ -54,6 +54,15 @@ SIGNAL_STATE_UPDATE = f"{DOMAIN}_state_update"
 SIGNAL_AVAILABILITY = f"{DOMAIN}_availability"
 SIGNAL_LOCATION = f"{DOMAIN}_location"
 
+# One device can carry more than one device_tracker: the car's own (live GPS while a trip
+# records, the parking pin otherwise) and the parking tracker, which stays where the car was
+# left. Location frames name their target with "tracker_id", which is the sensor id of the
+# entity they feed.
+PARKING_TRACKER_ID = "last_parking_location"
+# What an app older than the parking tracker sent as tracker_id. Only the car tracker may
+# claim such a frame — letting the parking tracker inherit it would make it follow the car.
+LEGACY_TRACKER_ID = "phone_location"
+
 # Frame types
 FRAME_HELLO = "hello"
 FRAME_STATE = "state"
