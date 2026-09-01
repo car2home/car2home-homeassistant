@@ -47,11 +47,14 @@ async def async_setup_entry(
                 continue
             known.add(key)
             new_entities.append(Car2HomeBinarySensor(coordinator, target_ctx, desc))
+        # Retire BEFORE adding. An id that moved (the app renamed a sensor, restored its English
+        # text, or a sibling changed its key) arrives as old id in retired_sensors and new id in
+        # sensors, in the SAME frame. Removing the old registry entry first frees its entity_id,
+        # so the new entity inherits it and history and automations carry on. The other way
+        # round, every rename minted a "_2" twin next to a dead original.
+        reap_retired_entities(hass, coordinator.data, "binary_sensor", known)
         if new_entities:
             async_add_entities(new_entities)
-        # Same pass removes what the app stopped exporting — an entity left behind would sit at its
-        # last value forever, which is worse than never having created it.
-        reap_retired_entities(hass, coordinator.data, "binary_sensor", known)
 
     entry.async_on_unload(
         async_dispatcher_connect(hass, SIGNAL_NEW_DESCRIPTOR, _add_from_descriptor)
