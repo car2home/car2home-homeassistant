@@ -151,7 +151,7 @@ Beyond the live sensor stream, the integration fires semantic events on the Home
 | `car2home_trip_started` | A new trip begins | `trip_id`, `data_source` (`obd` or `gps`), `start_time`, `start_location` (geocoded). |
 | `car2home_trip_ended` | A trip is finalized and saved | distance, duration, avg/max speed and RPM, fuel, average consumption, CO₂, full `driving_metrics` block (hard acceleration/braking/cornering counts, speeding, idle time and idle fuel, fuel cut, high-RPM and high-speed time, night driving, phone usage), `safe_score`, `eco_score`, `end_location`. |
 | `car2home_parking_detected` | Right after the trip ends, at the last known GPS point | `parking_id`, `trip_id`, geocoded `location`, trip duration and distance. |
-| `car2home_dtc_found` | A DTC scan is completed and persisted | scan mode, counts, and full confirmed / pending / permanent lists with descriptions, symptoms, cause and solution. |
+| `car2home_dtc_found` | A DTC scan is completed and persisted | `mode` (`basic`, `advanced` or `professional`), counts, and full confirmed / pending / permanent lists with descriptions, symptoms, cause and solution. |
 | `car2home_harsh_event` | A hard brake, hard acceleration or sharp cornering is detected (3 s debounce) | `type`, `magnitude_g`, `speed_kmh`, `location`, `trip_id`. |
 | `car2home_ecu_online` / `car2home_ecu_offline` | ECU connectivity flips | `device_name`, `elm_version`, `obd_protocol`, `latency_ms`, `reason`. |
 
