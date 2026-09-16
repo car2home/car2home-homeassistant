@@ -57,6 +57,10 @@ async def async_setup_entry(
 
 
 class Car2HomeTracker(Car2HomeEntity, RestoreEntity, TrackerEntity):
+    # No battery_level here. Home Assistant deprecated it on every device tracker base class: it
+    # logs a warning for any subclass that defines it, and from 2027.7 it is unsupported, because a
+    # battery level belongs in a battery sensor. The app never sent one in a location frame, so the
+    # override only ever returned None and nothing replaces it.
     _attr_source_type = SourceType.GPS
 
     def __init__(
@@ -89,15 +93,13 @@ class Car2HomeTracker(Car2HomeEntity, RestoreEntity, TrackerEntity):
             per_target = {}
             loc[self._target_id] = per_target
         # All-or-nothing: if a live frame already populated THIS TRACKER this boot, leave it —
-        # never splice a stale accuracy/battery onto live coordinates. Scoped per tracker so
+        # never splice a stale accuracy onto live coordinates. Scoped per tracker so
         # restoring the parking pin cannot suppress the car tracker's own restore, or vice versa.
         if self._sensor_id in per_target:
             return
         fix = {"latitude": lat, "longitude": lng}
         if attrs.get("gps_accuracy") is not None:
             fix["gps_accuracy"] = attrs.get("gps_accuracy")
-        if attrs.get("battery_level") is not None:
-            fix["battery_level"] = attrs.get("battery_level")
         # Restore the parking context alongside the coordinates. A parked car is the steady state
         # — the app publishes its pin once on the parking transition and then goes quiet — so
         # without this a Home Assistant restart would bring back the pin stripped of where and
@@ -142,14 +144,6 @@ class Car2HomeTracker(Car2HomeEntity, RestoreEntity, TrackerEntity):
             return 0
 
     @property
-    def battery_level(self) -> int | None:
-        bl = self._loc().get("battery_level")
-        try:
-            return int(bl) if bl is not None else None
-        except (TypeError, ValueError):
-            return None
-
-    @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """Parking context that rides along with the fix.
 
@@ -161,7 +155,7 @@ class Car2HomeTracker(Car2HomeEntity, RestoreEntity, TrackerEntity):
 
         Only present on parked fixes — a live fix carries ``source: "trip"`` alone. Keys are safe
         to expose here: TrackerEntity.state_attributes is @final and emits only in_zones,
-        source_type, battery_level, latitude, longitude and gps_accuracy, none of which collide.
+        source_type, latitude, longitude and gps_accuracy, none of which collide.
         """
         loc = self._loc()
         attrs = {
