@@ -54,7 +54,7 @@ CONTRIBUTING.md                this file
 
 ### Running against a local Home Assistant
 
-1. Install Home Assistant 2024.12 or later in a virtualenv or a container.
+1. Install Home Assistant 2025.11 or later in a virtualenv or a container.
 2. Symlink `custom_components/car2home/` into the HA config directory:
    ```sh
    ln -s "$(pwd)/custom_components/car2home" /path/to/ha/config/custom_components/car2home

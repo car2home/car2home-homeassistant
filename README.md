@@ -242,7 +242,7 @@ This integration is currently distributed as a **HACS custom repository**. There
 
 ## Requirements
 
-- Home Assistant **2024.12** or later.
+- Home Assistant **2025.11** or later (the units the app publishes, such as L/h, gal/h and the electric consumption class, are only valid from there).
 - **Car 2 Home** mobile app, paired to your vehicle via an ELM327 Bluetooth or Wi-Fi adapter.
 - Any OBD-II compliant vehicle (most cars built from 1996 onwards in the US, 2001+ in the EU).
 
