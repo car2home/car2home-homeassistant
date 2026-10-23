@@ -59,9 +59,14 @@ SIGNAL_LOCATION = f"{DOMAIN}_location"
 # left. Location frames name their target with "tracker_id", which is the sensor id of the
 # entity they feed.
 PARKING_TRACKER_ID = "last_parking_location"
-# What an app older than the parking tracker sent as tracker_id. Only the car tracker may
-# claim such a frame — letting the parking tracker inherit it would make it follow the car.
+# What an app older than the parking tracker sent as tracker_id, and what every app up to the
+# 2026-10-23 fix still stamps on the car tracker's frames (live and parked) instead of the car
+# tracker's own id. Only the car tracker may claim such a frame: letting the parking tracker
+# inherit it would make it follow the car.
 LEGACY_TRACKER_ID = "phone_location"
+# Arrival order of a location frame inside the per-tracker store. A position restored after a
+# Home Assistant restart carries 0, so any frame that arrives afterwards wins.
+LOCATION_SEQ_KEY = "_seq"
 
 # Frame types
 FRAME_HELLO = "hello"

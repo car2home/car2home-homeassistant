@@ -13,6 +13,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from .const import (
     DOMAIN,
     LEGACY_TRACKER_ID,
+    LOCATION_SEQ_KEY,
     PARKING_TRACKER_ID,
     SIGNAL_LOCATION,
     SIGNAL_NEW_DESCRIPTOR,
@@ -97,7 +98,9 @@ class Car2HomeTracker(Car2HomeEntity, RestoreEntity, TrackerEntity):
         # restoring the parking pin cannot suppress the car tracker's own restore, or vice versa.
         if self._sensor_id in per_target:
             return
-        fix = {"latitude": lat, "longitude": lng}
+        # Order 0: valid only until a frame arrives, under this tracker's id or (car tracker) the
+        # legacy one. See _loc.
+        fix = {"latitude": lat, "longitude": lng, LOCATION_SEQ_KEY: 0}
         if attrs.get("gps_accuracy") is not None:
             fix["gps_accuracy"] = attrs.get("gps_accuracy")
         # Restore the parking context alongside the coordinates. A parked car is the steady state
@@ -110,22 +113,33 @@ class Car2HomeTracker(Car2HomeEntity, RestoreEntity, TrackerEntity):
         per_target[self._sensor_id] = fix
 
     def _loc(self) -> dict:
-        """This tracker's own fix, out of the target's per-tracker store.
+        """This tracker's fix, out of the target's per-tracker store: the newest one it owns.
 
         A device can carry two trackers — the car's, which follows the live GPS while a trip
         records, and the parking one, which stays where the car was left. They are told apart by
         the ``tracker_id`` the app stamps on each location frame.
+
+        The car tracker owns two slots: its own id, and the legacy ``phone_location`` that apps
+        in the field still stamp on its frames (live and parked). The newest of the two wins, by
+        arrival order. A position restored after a restart sits in the own slot with order 0, so
+        any frame that arrives afterwards beats it. Reading the own slot first, as before, let the
+        restored position win over every later legacy frame, for good: the tracker froze on its
+        last pre-restart parking, through new parkings and drives (field report 2026-10-23).
+
+        Only the car tracker may claim the legacy slot: handing it to the parking tracker would
+        make the parking pin follow the car for the whole drive.
         """
         per_target = self.coordinator.data.get("location", {}).get(self._target_id) or {}
         if not isinstance(per_target, dict):
             return {}
-        frame = per_target.get(self._sensor_id)
-        if frame is None and self._sensor_id != PARKING_TRACKER_ID:
-            # An app older than the parking tracker sends one frame per target. Only the car
-            # tracker may claim it: handing it to the parking tracker would make the parking pin
-            # follow the car for the whole drive.
-            frame = per_target.get(LEGACY_TRACKER_ID)
-        return frame if isinstance(frame, dict) else {}
+        candidates = [per_target.get(self._sensor_id)]
+        if self._sensor_id != PARKING_TRACKER_ID:
+            candidates.append(per_target.get(LEGACY_TRACKER_ID))
+        frames = [f for f in candidates if isinstance(f, dict)]
+        if not frames:
+            return {}
+        # max keeps the first of equal orders: the own slot, listed first.
+        return max(frames, key=lambda f: f.get(LOCATION_SEQ_KEY, 0))
 
     @property
     def latitude(self) -> float | None:

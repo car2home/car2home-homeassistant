@@ -33,6 +33,7 @@ from .const import (
     CONF_TARGETS,
     DOMAIN,
     LEGACY_TRACKER_ID,
+    LOCATION_SEQ_KEY,
     MANUFACTURER_DEFAULT,
     SIGNAL_AVAILABILITY,
     SIGNAL_LOCATION,
@@ -64,6 +65,8 @@ class Car2HomeCoordinator(DataUpdateCoordinator):
             always_update=True,
         )
         self.entry = entry
+        # Arrival counter of location frames (see handle_location). Restored fixes carry 0.
+        self._location_seq = 0
         self.data: dict[str, Any] = {
             "targets": {},
             "values": {},
@@ -269,7 +272,10 @@ class Car2HomeCoordinator(DataUpdateCoordinator):
             # Absent, or a flat frame left by a previous version of this integration.
             slot = {}
             self.data["location"][target] = slot
-        slot[tracker] = frame
+        # Arrival order, so a tracker fed under two ids (its own and the legacy one) reads the newest
+        # frame, and a position restored after a restart (order 0) loses to any frame that arrives.
+        self._location_seq += 1
+        slot[tracker] = {**frame, LOCATION_SEQ_KEY: self._location_seq}
         self.data["last_frame_ts"] = time.time()
         self.async_set_updated_data(self.data)
         async_dispatcher_send(self.hass, SIGNAL_LOCATION, self.entry.entry_id)
