@@ -1,6 +1,7 @@
 """Sensor platform for Car 2 Home."""
 from __future__ import annotations
 
+from datetime import date, datetime
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -142,6 +143,21 @@ class Car2HomeSensor(Car2HomeEntity, RestoreSensor, SensorEntity):
                 self._target_id, {}
             ).setdefault(self._sensor_id, last.native_value)
 
+    def _follow_declared_device_class(self) -> None:
+        """Adopt the device class of the descriptor the app declares now for this sensor."""
+        target = (self.coordinator.data.get("targets") or {}).get(self._target_id) or {}
+        for desc in target.get("sensors") or []:
+            if desc.get("id") != self._sensor_id:
+                continue
+            declared = desc.get("device_class")
+            try:
+                wanted = SensorDeviceClass(declared) if declared else None
+            except ValueError:
+                return
+            if wanted != self._attr_device_class:
+                self._attr_device_class = wanted
+            return
+
     @property
     def native_value(self) -> Any:
         value = self._values().get(self._sensor_id)
@@ -156,8 +172,33 @@ class Car2HomeSensor(Car2HomeEntity, RestoreSensor, SensorEntity):
         # object — HA rejects a raw ISO string and shows "unknown" (this is why
         # "Last refuel — Date" was blank). Parse the app's ISO-8601 string
         # (e.g. "2026-06-16T21:00:00.0000000Z") into a datetime.
-        if self._attr_device_class == SensorDeviceClass.TIMESTAMP and isinstance(value, str):
-            return dt_util.parse_datetime(value)
+        # The app may change a sensor's device class in a later hello (the next-fill day went from a date and time
+        # to a date only): follow the descriptor it declares now, not the one this entity was created with.
+        self._follow_declared_device_class()
+
+        if self._attr_device_class == SensorDeviceClass.TIMESTAMP:
+            if isinstance(value, str):
+                parsed = dt_util.parse_datetime(value)
+                # A value without a time zone is rejected by Home Assistant and would abort the write: unknown.
+                return parsed if parsed is not None and parsed.tzinfo is not None else None
+            if isinstance(value, datetime) and value.tzinfo is None:
+                return None
+            return value
+
+        # A `date` device_class sensor MUST return a date object, never a string: HA rejects a raw "2026-12-06". A
+        # value restored from the time this entity was a timestamp (a datetime) keeps its day.
+        if self._attr_device_class == SensorDeviceClass.DATE:
+            if isinstance(value, datetime):
+                return value.date()
+            if isinstance(value, date):
+                return value
+            if isinstance(value, str):
+                day = dt_util.parse_date(value)
+                if day is None:
+                    parsed = dt_util.parse_datetime(value)
+                    day = parsed.date() if parsed is not None else None
+                return day
+            return None
 
         # Defense in depth: a sensor with numeric context (state_class set,
         # numeric device_class, or a unit) MUST publish numeric values — HA

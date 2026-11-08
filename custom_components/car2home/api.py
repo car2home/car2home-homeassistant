@@ -40,6 +40,7 @@ from .const import (
     CONF_VIN,
     DOMAIN,
     FRAME_ACK,
+    FRAME_CAPS,
     FRAME_AVAILABILITY,
     FRAME_BACKFILL,
     FRAME_ERROR,
@@ -53,6 +54,7 @@ from .const import (
     PAIRING_CODE_DIGITS,
     PAIRING_CODE_TTL_SEC,
     PAIR_PATH,
+    PLUGIN_CAPABILITIES,
     WIRE_PROTOCOL_VERSION,
     WS_PATH,
 )
@@ -298,6 +300,11 @@ class Car2HomeWsView(HomeAssistantView):
 
         if ftype == FRAME_HELLO:
             coord.handle_hello(frame)
+            # Tell the app what this plugin reads (a date-only entity), so it never sends a form an older plugin
+            # would reject.
+            await ws.send_json(
+                {"type": FRAME_CAPS, "v": WIRE_PROTOCOL_VERSION, "caps": PLUGIN_CAPABILITIES}
+            )
         elif ftype == FRAME_STATE:
             coord.handle_state(frame)
         elif ftype == FRAME_LOCATION:

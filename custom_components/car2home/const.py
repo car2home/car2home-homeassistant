@@ -80,3 +80,7 @@ FRAME_PONG = "pong"
 FRAME_COMMAND = "command"
 FRAME_ACK = "ack"
 FRAME_ERROR = "error"
+# Sent back to the app after each hello: what this plugin can read. An app from before it ignores the frame; an app
+# that knows it declares a date-only entity only when "date_sensor" is listed (the next-fill day).
+FRAME_CAPS = "caps"
+PLUGIN_CAPABILITIES = ["date_sensor"]
