@@ -71,15 +71,24 @@ class Car2HomeSensor(Car2HomeEntity, RestoreSensor, SensorEntity):
         self._desc = desc
         self._attr_name = desc.get("name")
         self._attr_translation_key = desc.get("translation_key")
+        if desc.get("entity_category") == "diagnostic":
+            self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        self._apply_descriptor(desc)
+
+    def _apply_descriptor(self, desc: dict[str, Any]) -> None:
+        """Take the unit, icon, device and state class, precision and options of a descriptor.
+
+        Called at creation and again whenever the app declares this sensor differently (the person changed the
+        unit of a measure Home Assistant cannot convert, such as fuel economy): a value arriving in the new unit
+        must never be shown under the unit the entity was created with. The name is set at creation only, since
+        the person may have renamed the entity in Home Assistant.
+        """
+        self._desc = desc
         self._attr_icon = desc.get("icon")
         self._attr_native_unit_of_measurement = desc.get("unit") or None
 
-        # Always initialize these so later reads (e.g. the options-vs-enum
-        # check below) don't hit AttributeError when the descriptor omits
-        # device_class / state_class. Previously, if `device_class` wasn't
-        # set, `self._attr_device_class` stayed unassigned and the `if options
-        # and self._attr_device_class == ...` line crashed — which aborted
-        # sensor creation and also closed the WS as a side effect.
+        # Always assign both, so a descriptor without them never leaves an attribute unset (an unset device
+        # class once crashed sensor creation and closed the socket).
         self._attr_device_class = None
         self._attr_state_class = None
 
@@ -97,9 +106,6 @@ class Car2HomeSensor(Car2HomeEntity, RestoreSensor, SensorEntity):
             except ValueError:
                 pass
 
-        if desc.get("entity_category") == "diagnostic":
-            self._attr_entity_category = EntityCategory.DIAGNOSTIC
-
         # Only apply precision when the sensor has a numeric context (device
         # class that HA recognizes as numeric, a state_class, or a unit). HA
         # treats "suggested_display_precision set + no unit/class" as "this
@@ -115,8 +121,9 @@ class Car2HomeSensor(Car2HomeEntity, RestoreSensor, SensorEntity):
             or self._attr_state_class
             or self._attr_native_unit_of_measurement
         )
-        if isinstance(precision, int) and has_numeric_context:
-            self._attr_suggested_display_precision = precision
+        self._attr_suggested_display_precision = (
+            precision if isinstance(precision, int) and has_numeric_context else None
+        )
 
         # ENUM is a non-numeric device_class even though it sets a "context"
         # — exclude it from the numeric guard in native_value below.
@@ -125,38 +132,52 @@ class Car2HomeSensor(Car2HomeEntity, RestoreSensor, SensorEntity):
             and self._attr_device_class != SensorDeviceClass.ENUM
         )
 
-        # Initialize to None so the defensive check in native_value works even
-        # when the descriptor doesn't declare options / this isn't an enum.
+        # None unless this is an enum with declared options, so the defensive check in native_value always works.
         self._attr_options = None
         options = desc.get("options")
         if options and self._attr_device_class == SensorDeviceClass.ENUM:
             self._attr_options = list(options)
 
+    def _follow_declared_descriptor(self) -> None:
+        """Adopt the descriptor the app declares now for this sensor, when it differs from the one applied."""
+        target = (self.coordinator.data.get("targets") or {}).get(self._target_id) or {}
+        for desc in target.get("sensors") or []:
+            if desc.get("id") == self._sensor_id:
+                if desc != self._desc:
+                    previous_unit = self._attr_native_unit_of_measurement
+                    self._apply_descriptor(desc)
+                    if self._attr_native_unit_of_measurement != previous_unit:
+                        # The value held now was sent in the previous unit; under the new label it would read as a
+                        # wrong number (8.1 L/100km shown as 8.1 km/L). Show unknown until the app sends one in the
+                        # new unit.
+                        self._values().pop(self._sensor_id, None)
+                return
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        # Before the state is written, so the unit and the value of one write always agree (a hello that changes
+        # the unit and the values in the new unit reach the entity in the same update).
+        self._follow_declared_descriptor()
+        super()._handle_coordinator_update()
+
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+        # The catalogue may already hold a newer descriptor than the one this entity was built from.
+        self._follow_declared_descriptor()
         last = await self.async_get_last_sensor_data()
-        if last is not None and last.native_value is not None:
+        # A value saved under another unit (the app changed it while Home Assistant was down) is not restored, for
+        # the same reason a held value is dropped when the unit changes.
+        if (
+            last is not None
+            and last.native_value is not None
+            and last.native_unit_of_measurement == self._attr_native_unit_of_measurement
+        ):
             # Seed the restored value into THIS target's namespace so the first
             # render isn't None. Must nest under _target_id — a flat write would
             # land outside every car namespace and never be read.
             self.coordinator.data.setdefault("values", {}).setdefault(
                 self._target_id, {}
             ).setdefault(self._sensor_id, last.native_value)
-
-    def _follow_declared_device_class(self) -> None:
-        """Adopt the device class of the descriptor the app declares now for this sensor."""
-        target = (self.coordinator.data.get("targets") or {}).get(self._target_id) or {}
-        for desc in target.get("sensors") or []:
-            if desc.get("id") != self._sensor_id:
-                continue
-            declared = desc.get("device_class")
-            try:
-                wanted = SensorDeviceClass(declared) if declared else None
-            except ValueError:
-                return
-            if wanted != self._attr_device_class:
-                self._attr_device_class = wanted
-            return
 
     @property
     def native_value(self) -> Any:
@@ -172,10 +193,6 @@ class Car2HomeSensor(Car2HomeEntity, RestoreSensor, SensorEntity):
         # object — HA rejects a raw ISO string and shows "unknown" (this is why
         # "Last refuel — Date" was blank). Parse the app's ISO-8601 string
         # (e.g. "2026-06-16T21:00:00.0000000Z") into a datetime.
-        # The app may change a sensor's device class in a later hello (the next-fill day went from a date and time
-        # to a date only): follow the descriptor it declares now, not the one this entity was created with.
-        self._follow_declared_device_class()
-
         if self._attr_device_class == SensorDeviceClass.TIMESTAMP:
             if isinstance(value, str):
                 parsed = dt_util.parse_datetime(value)
