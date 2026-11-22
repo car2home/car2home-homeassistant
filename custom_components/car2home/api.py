@@ -17,6 +17,7 @@ import logging
 import secrets
 import time
 import uuid
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -231,6 +232,7 @@ class Car2HomeWsView(HomeAssistantView):
 
     def __init__(self, hass: HomeAssistant) -> None:
         self._hass = hass
+        self._event_ids: dict[str, OrderedDict[str, None]] = {}
 
     async def get(self, request: web.Request) -> web.StreamResponse:
         token = request.query.get("token") or ""
@@ -320,6 +322,11 @@ class Car2HomeWsView(HomeAssistantView):
             event_name = frame.get("event")
             if event_name:
                 data = dict(frame.get("data") or {})
+                # The app keeps every event until it sees it delivered and sends it again after a connection that
+                # dropped before the confirmation: the same event_id fires once. An event without an id (an app from
+                # before the outbox) fires as before.
+                if self._seen_event(coord.entry.entry_id, data.get("event_id")):
+                    return
                 # Attach the vehicle identity so automations can filter by car.
                 # Resolve the event's target (car_id) against the target
                 # catalogue; fall back to legacy single-device entry fields.
@@ -345,6 +352,25 @@ class Car2HomeWsView(HomeAssistantView):
                     "received": ftype,
                 }
             )
+
+
+    # The last event ids fired per config entry. Kept in memory: a repeat comes only after a dropped connection, in
+    # the seconds that follow, never across a Home Assistant restart.
+    _EVENT_IDS_KEPT = 500
+
+    def _seen_event(self, entry_id: str, event_id: Any) -> bool:
+        """True when this event id already fired for this entry; records it otherwise."""
+        if not event_id:
+            return False
+        seen = self._event_ids.setdefault(entry_id, OrderedDict())
+        key = str(event_id)
+        if key in seen:
+            seen.move_to_end(key)
+            return True
+        seen[key] = None
+        while len(seen) > self._EVENT_IDS_KEPT:
+            seen.popitem(last=False)
+        return False
 
 
 class Car2HomeIngestView(HomeAssistantView):

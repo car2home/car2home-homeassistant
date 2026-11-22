@@ -144,7 +144,13 @@ All units are metric on the wire; Home Assistant converts the display to your co
 
 ## Events
 
-Beyond the live sensor stream, the integration fires semantic events on the Home Assistant event bus when meaningful things happen *to the vehicle*. Every event arrives as `car2home_{event}` and carries `vin`, `device_slug` and `timestamp_ms` alongside the event-specific payload.
+Beyond the live sensor stream, the integration fires semantic events on the Home Assistant event bus when meaningful things happen *to the vehicle*. Every event arrives as `car2home_{event}` and carries, alongside the event-specific payload:
+
+- `vin` and `device_slug`: the vehicle the event is about;
+- `timestamp_ms` and `occurred_at` (ISO 8601, UTC): when the event happened on the phone, never when it was sent;
+- `event_id`: the event's own id, the same on every attempt.
+
+**No event is lost when the phone is away.** The app keeps every event on the phone until Home Assistant confirms it read it, and sends the kept ones, in the order they happened, as soon as it connects again (kept up to 7 days, 500 events). An event that went out on a connection that dropped before the confirmation is sent again; the integration fires each `event_id` once. Values are always metric (km, km/h, litres, L/100 km), whatever unit the app shows.
 
 | Event | Fired when | Highlights |
 |---|---|---|
@@ -153,7 +159,7 @@ Beyond the live sensor stream, the integration fires semantic events on the Home
 | `car2home_parking_detected` | Right after the trip ends, at the last known GPS point | `parking_id`, `trip_id`, geocoded `location`, trip duration and distance. |
 | `car2home_dtc_found` | A DTC scan is completed and persisted | `mode` (`basic`, `advanced` or `professional`), counts, and full confirmed / pending / permanent lists with descriptions, symptoms, cause and solution. |
 | `car2home_harsh_event` | A hard brake, hard acceleration or sharp cornering is detected (3 s debounce) | `type`, `magnitude_g`, `speed_kmh`, `location`, `trip_id`. |
-| `car2home_ecu_online` / `car2home_ecu_offline` | ECU connectivity flips | `device_name`, `elm_version`, `obd_protocol`, `latency_ms`, `reason`. |
+| `car2home_ecu_online` / `car2home_ecu_offline` | The car starts or stops answering (ignition on or off, the adapter link dropped) | `device_name`, `elm_version`, `obd_protocol`, `latency_ms`, `reason`. |
 
 ### Example automations
 
